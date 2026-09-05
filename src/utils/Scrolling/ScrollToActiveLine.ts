@@ -1,0 +1,505 @@
+import { $currentLyricsType, $lyricsContainerExists } from "../../utils/stores.ts";
+import Global from "../../components/Global/Global.ts";
+import { SpotifyPlayer } from "../../components/Global/SpotifyPlayer.ts";
+import { PageContainer } from "../../components/Pages/PageView.ts";
+import { IsCompactMode } from "../../components/Utils/CompactMode.ts";
+import { IsPIP } from "../../components/Utils/PopupLyrics.ts";
+import {
+  type LyricsLine,
+  LyricsObject,
+  type LyricsSyllable,
+  type LyricsType,
+} from "../Lyrics/lyrics.ts";
+import { ScrollIntoCenterViewCSS } from "../ScrollIntoView/Center.ts";
+import { ScrollIntoTopViewCSS } from "../ScrollIntoView/Top.ts";
+import { getLyricsVirtualizer, scrollLyricsToIndex } from "../Lyrics/LyricsVirtualizer.ts";
+
+// Define intersection types that include _LineIndex
+type LyricsLineWithIndex = LyricsLine & { _LineIndex: number };
+type LyricsSyllableWithIndex = LyricsSyllable & { _LineIndex: number };
+type EnhancedLyricsItem = LyricsLineWithIndex | LyricsSyllableWithIndex;
+
+// Define proper types for variables
+let lastLine: HTMLElement | null = null;
+let isUserScrolling = false;
+let lastUserScrollTime = 0;
+let lastPosition: number = 0;
+const USER_SCROLL_COOLDOWN = 750; // 0.75 second cooldown
+// const POSITION_THRESHOLD = 500; // 500ms threshold for start/end detection
+
+// Force scroll queue mechanism
+let forceScrollQueued = false;
+let smoothForceScrollQueued = false;
+
+// --- NEW: Module variables for cleanup ---
+let currentSimpleBarInstance: any | null = null;
+let wheelHandler: (() => void) | null = null;
+let touchMoveHandler: (() => void) | null = null;
+// --- END NEW ---
+
+const wasDrasticPositionChange = (lastPosition: number, newPosition: number) => {
+  const positionChange = Math.abs(newPosition - lastPosition);
+  return positionChange > 1000;
+};
+
+// Add focus event listener to reset state when window is focused
+window.addEventListener("focus", ResetLastLine);
+// Add resize event listener to reset state when window is resized
+window.addEventListener("resize", ResetLastLine);
+
+// Create ResizeObserver to monitor LyricsContent container dimensions
+const lyricsContentObserver = new ResizeObserver(() => {
+  ResetLastLine();
+});
+
+// Function to setup the observer
+function setupLyricsContentObserver() {
+  const lyricsContent = PageContainer?.querySelector(".LyricsContainer .LyricsContent");
+  if (lyricsContent) {
+    // Ensure we don't observe multiple times if called again
+    lyricsContentObserver.disconnect();
+    lyricsContentObserver.observe(lyricsContent);
+  }
+}
+
+function handleUserScroll(ScrollSimplebar: any | null) {
+  // Allow null
+  if (!ScrollSimplebar) return; // Add null check
+  if (!isUserScrolling) {
+    isUserScrolling = true;
+    // Add HideLineBlur class when user starts scrolling
+    const lyricsContent = PageContainer?.querySelector(".LyricsContainer .LyricsContent");
+    if (lyricsContent) {
+      lyricsContent.classList.add("HideLineBlur");
+    } else {
+      // --- NEW: Add warning if element not found ---
+      console.warn(
+        "SpicyLyrics: Could not find .LyricsContent in handleUserScroll to add HideLineBlur."
+      );
+      // --- END NEW ---
+    }
+  }
+  lastUserScrollTime = performance.now();
+}
+
+// Initialization function for scroll events and observers
+export function InitializeScrollEvents(ScrollSimplebar: any) {
+  if (!$lyricsContainerExists.get()) return;
+  // --- NEW: Store instance and define handlers ---
+  currentSimpleBarInstance = ScrollSimplebar;
+  wheelHandler = () => handleUserScroll(currentSimpleBarInstance);
+  touchMoveHandler = () => handleUserScroll(currentSimpleBarInstance);
+  // --- END NEW ---
+
+  // 重新挂上模块级 window 监听（CleanupScrollEvents 会移除它们，
+  // 若不加回，第一首歌之后 focus/resize 的 ResetLastLine 永久失效）
+  window.addEventListener("focus", ResetLastLine);
+  window.addEventListener("resize", ResetLastLine);
+
+  // Setup the observer
+  setupLyricsContentObserver();
+
+  // Add scroll event listener
+  const scrollElement = ScrollSimplebar?.getScrollElement();
+  if (scrollElement && wheelHandler && touchMoveHandler) {
+    // Check handlers exist
+    // Remove potential old listeners first (optional, but safer if called multiple times)
+    scrollElement.removeEventListener("wheel", wheelHandler);
+    scrollElement.removeEventListener("touchmove", touchMoveHandler);
+    // Add new listeners
+    scrollElement.addEventListener("wheel", wheelHandler);
+    scrollElement.addEventListener("touchmove", touchMoveHandler);
+  }
+}
+
+/**
+ * How far ahead — counted in real lyric lines, background lines excluded — we
+ * look when deciding whether the highest active line may keep the anchor.
+ * Bump to 3 to let long lines hold the anchor for longer.
+ */
+const PIN_LOOKAHEAD = 2;
+
+/** Only Syllable lines carry BGLine; line-synced lyrics have no background lines. */
+const IsBGLine = (line: LyricsLine | LyricsSyllable): boolean =>
+  (line as LyricsSyllable).BGLine === true;
+
+/** Background lines belong to the lead line above them, and are never a scroll target. */
+const ResolveToLeadIndex = (Lines: LyricsLine[] | LyricsSyllable[], index: number): number => {
+  let i = index;
+  while (i > 0 && IsBGLine(Lines[i])) i--;
+  return i;
+};
+
+/** When the lead line at `leadIdx` and its background lines have all finished. */
+const GetGroupEndTime = (Lines: LyricsLine[] | LyricsSyllable[], leadIdx: number): number => {
+  let end = Lines[leadIdx].EndTime;
+  for (let i = leadIdx + 1; i < Lines.length && IsBGLine(Lines[i]); i++) {
+    if (Lines[i].EndTime > end) end = Lines[i].EndTime;
+  }
+  return end;
+};
+
+/** The PIN_LOOKAHEAD-th non-background line after `leadIdx`, or null past the end. */
+const GetLookaheadLine = (Lines: LyricsLine[] | LyricsSyllable[], leadIdx: number) => {
+  let remaining = PIN_LOOKAHEAD;
+  for (let i = leadIdx + 1; i < Lines.length; i++) {
+    if (IsBGLine(Lines[i])) continue;
+    if (--remaining === 0) return Lines[i];
+  }
+  return null;
+};
+
+const GetScrollLine = (Lines: LyricsLine[] | LyricsSyllable[], ProcessedPosition: number) => {
+  if ($currentLyricsType.get() === "Static" || $currentLyricsType.get() === "None" || !Lines)
+    return;
+  // 1) gather the indices of all active lines. This runs every animation frame,
+  // so we keep indices rather than materialising a copy of each active line.
+  const activeIndices: number[] = [];
+  for (let i = 0; i < Lines.length; i++) {
+    const line = Lines[i];
+    if (
+      typeof line.StartTime === "number" &&
+      typeof line.EndTime === "number" &&
+      line.StartTime <= ProcessedPosition &&
+      line.EndTime >= ProcessedPosition
+    ) {
+      activeIndices.push(i);
+    }
+  }
+
+  if (activeIndices.length === 0) return null;
+
+  const enhance = (index: number) => ({ ...Lines[index], _LineIndex: index }) as EnhancedLyricsItem;
+
+  // The highest active line keeps the anchor as long as it (and its background
+  // lines) finish before the line PIN_LOOKAHEAD real lines further down starts.
+  const anchorIdx = ResolveToLeadIndex(Lines, activeIndices[0]);
+  const lookahead = GetLookaheadLine(Lines, anchorIdx);
+  if (lookahead === null || GetGroupEndTime(Lines, anchorIdx) <= lookahead.StartTime) {
+    return enhance(anchorIdx);
+  }
+
+  // Anchor refused — fall back to the original heuristic: contiguous or off by
+  // only 1 → the first active line, a bigger gap → the last.
+  const firstIdx = activeIndices[0];
+  const lastIdx = activeIndices[activeIndices.length - 1];
+  return enhance(ResolveToLeadIndex(Lines, lastIdx - firstIdx <= 1 ? firstIdx : lastIdx));
+};
+
+const ScrollTo = (
+  container: HTMLElement,
+  element: HTMLElement,
+  instantScroll: boolean = false,
+  type: "Center" | "Top" = "Center",
+  lineIndex?: number
+) => {
+  if (lineIndex !== undefined && getLyricsVirtualizer()) {
+    // instantScroll is effectively always true in the virtualizer path
+    // (we set scrollTop directly), but passing the flag keeps the intent
+    // explicit and allows a future smooth-scroll path if needed.
+    scrollLyricsToIndex(
+      lineIndex,
+      type === "Top" ? "start" : "center",
+      instantScroll,
+      type === "Top" ? (IsPIP ? -50 : -85) : 30
+    );
+    return;
+  }
+  if (type === "Center") {
+    ScrollIntoCenterViewCSS(container, element, -30, instantScroll);
+  } else if (type === "Top") {
+    ScrollIntoTopViewCSS(container, element, IsPIP ? 50 : 85, instantScroll);
+  }
+};
+
+let scrolledToLastLine = false;
+let scrolledToFirstLine = false;
+
+// Throttle layout-dependent viewport checks to avoid forced sync layouts on every tick
+const VIEWPORT_CHECK_INTERVAL = 350; // milliseconds
+let lastViewportCheckTime = 0;
+let lastViewportLine: HTMLElement | null = null;
+let lastViewportContainer: HTMLElement | null = null;
+let lastIsLineInViewport = false;
+
+const GetScrollType = (): "Center" | "Top" => {
+  return IsCompactMode() ? "Top" : "Center";
+};
+
+const policyEventPreset = "policy:";
+
+let allowForceScrolling = true;
+
+export const SetForceScrollingPolicy = (value: boolean) => {
+  allowForceScrolling = value; // true = allow force scrolling, false = disallow force scrolling
+  Global.Event.evoke(`${policyEventPreset}force-scrolling`, value);
+};
+export const GetForceScrollingPolicy = () => {
+  return allowForceScrolling;
+};
+
+export function ScrollToActiveLine(ScrollSimplebar: any) {
+  if ($currentLyricsType.get() === "Static" || $currentLyricsType.get() === "None") return;
+  if (!$lyricsContainerExists.get()) return;
+
+  const currentType = $currentLyricsType.get() as LyricsType;
+  const Lines = LyricsObject.Types[currentType]?.Lines as LyricsLine[] | LyricsSyllable[];
+  if (!Lines) return;
+
+  // Check if a force scroll was queued
+  const isForceScrollQueued = forceScrollQueued;
+  const isSmoothForceScrollQueued = smoothForceScrollQueued;
+
+  //if (Spicetify.Platform.History.location.pathname === "/SpicyLyrics") {
+  const Position = SpotifyPlayer.GetPosition();
+  const PositionOffset = 0;
+  const ProcessedPosition = Position + PositionOffset;
+  const currentLine = GetScrollLine(Lines, ProcessedPosition) as EnhancedLyricsItem | null;
+
+  const allLinesNotSung = Lines.every((line: any) => line.Status === "NotSung");
+  const activeLines = Lines.filter((line: any) => line.Status === "Active");
+  const sungLines = Lines.filter((line: any) => line.Status === "Sung");
+  const oneActiveNoSung = activeLines.length === 1 && sungLines.length === 0;
+  const allLinesSung = Lines.every((line: any) => line.Status === "Sung");
+  const shouldForceScroll = isForceScrollQueued || lastLine == null;
+
+  if (
+    shouldForceScroll ||
+    (!SpotifyPlayer.IsPlaying && lastPosition !== Position) ||
+    (lastPosition !== 0 && wasDrasticPositionChange(lastPosition ?? 0, Position))
+  ) {
+    if (!allowForceScrolling) return;
+    const container = ScrollSimplebar?.getScrollElement() as HTMLElement;
+    if (!container) return;
+    isUserScrolling = false;
+    const scrollToLine = allLinesSung
+      ? Lines[Lines.length - 1]?.HTMLElement
+      : currentLine?.HTMLElement;
+    if (!scrollToLine) return;
+    lastLine = scrollToLine;
+    const forceScrollLineIndex = allLinesSung ? Lines.length - 1 : currentLine?._LineIndex;
+    ScrollTo(
+      container,
+      scrollToLine,
+      shouldForceScroll ||
+        (lastPosition !== 0 && wasDrasticPositionChange(lastPosition ?? 0, Position)),
+      GetScrollType(),
+      forceScrollLineIndex
+    );
+    if (forceScrollQueued) {
+      forceScrollQueued = false; // Reset the queue after using it
+    }
+    lastPosition = Position;
+    return;
+  }
+
+  lastPosition = Position;
+
+  if (isSmoothForceScrollQueued) {
+    if (!allowForceScrolling) return;
+    const container = ScrollSimplebar?.getScrollElement() as HTMLElement;
+    if (!container) return;
+    isUserScrolling = false;
+    const scrollToLine = allLinesSung
+      ? Lines[Lines.length - 1]?.HTMLElement
+      : currentLine?.HTMLElement;
+    if (!scrollToLine) return;
+    lastLine = scrollToLine;
+    const smoothScrollLineIndex = allLinesSung ? Lines.length - 1 : currentLine?._LineIndex;
+    ScrollTo(container, scrollToLine, false, GetScrollType(), smoothScrollLineIndex);
+    if (smoothForceScrollQueued) {
+      smoothForceScrollQueued = false; // Reset the queue after using it
+    }
+    return;
+  }
+
+  if (!Lines) return;
+
+  // --- NEW: Check conditions to scroll to top ---
+
+  if (allLinesNotSung || oneActiveNoSung) {
+    if (scrolledToFirstLine) return;
+    QueueSmoothForceScroll();
+    scrolledToFirstLine = true;
+  }
+  // --- END NEW ---
+
+  // Check if all lines are sung
+
+  if (allLinesSung) {
+    if (scrolledToLastLine) return;
+    QueueSmoothForceScroll();
+    scrolledToLastLine = true;
+  }
+
+  Continue(currentLine);
+
+  function Continue(currentLine: EnhancedLyricsItem | null) {
+    if (currentLine) {
+      const LineElem = currentLine?.HTMLElement as HTMLElement;
+      if (!LineElem) return;
+      const container = ScrollSimplebar?.getScrollElement() as HTMLElement;
+      if (!container) return;
+      const now = performance.now();
+      const timeSinceLastScroll = now - lastUserScrollTime;
+
+      // Throttled layout read for viewport visibility
+      const shouldRecalculateViewport =
+        now - lastViewportCheckTime > VIEWPORT_CHECK_INTERVAL ||
+        lastViewportLine !== LineElem ||
+        lastViewportContainer !== container;
+
+      if (shouldRecalculateViewport) {
+        // Check if the line is at least 5px visible within the scroll container
+        const elementOffsetTop = LineElem.offsetTop;
+        const elementBottom = elementOffsetTop + LineElem.clientHeight;
+        const viewportTop = container.scrollTop;
+        const viewportBottom = viewportTop + container.clientHeight;
+
+        const visibleTop = Math.max(elementOffsetTop, viewportTop);
+        const visibleBottom = Math.min(elementBottom, viewportBottom);
+        const visibleHeight = Math.max(0, visibleBottom - visibleTop);
+
+        // Consider the line "in viewport" if at least 5px is visible
+        lastIsLineInViewport = visibleHeight >= 5;
+        lastViewportCheckTime = now;
+        lastViewportLine = LineElem;
+        lastViewportContainer = container;
+      }
+
+      // When virtualizer is active, detached (off-screen) elements have offsetTop=0,
+      // making the standard viewport check unreliable. Use isConnected as a proxy:
+      // mounted elements are near the current scroll position (within overscan), so
+      // treating them as "in viewport" is close enough. Detached elements mean the
+      // user scrolled far away — preserve the original no-scroll behavior.
+      const isLineInViewport =
+        lastIsLineInViewport || (getLyricsVirtualizer() !== null && LineElem.isConnected);
+
+      const isSameLine = lastLine === LineElem;
+
+      /*
+                for (let i = 0; i < Lines.length; i++) {
+                    const line = Lines[i];
+                    if (line.HTMLElement) {
+                        const container = ScrollSimplebar?.getScrollElement() as HTMLElement;
+                        if (!container) return;
+                        const LineElem = line.HTMLElement;
+                        const lineRect = LineElem.getBoundingClientRect();
+                        const containerRect = container.getBoundingClientRect();
+                        const isLineInViewport = lineRect.top >= containerRect.top && lineRect.bottom <= containerRect.bottom;
+
+                        if (!isLineInViewport) {
+                            if (!LineElem.classList.contains("NotInViewport")) LineElem.classList.add("NotInViewport")
+                        } else {
+                            if (LineElem.classList.contains("NotInViewport")) LineElem.classList.remove("NotInViewport")
+                        }
+                    }
+                } */
+
+      // If this is the first line (no previous line), force scroll without checks
+      /* if (!shouldForceScroll) {
+                    isUserScrolling = false;
+                    lastLine = LineElem;
+                    ScrollIntoCenterViewCSS(container, LineElem, true);
+                    return;
+                } */
+
+      // Only auto-scroll if BOTH conditions are met:
+      // 1. User hasn't scrolled in the last second (cooldown passed)
+      // 2. AND the active line is in viewport
+      if (timeSinceLastScroll > USER_SCROLL_COOLDOWN && isLineInViewport) {
+        // --- REVISED LOGIC for resuming auto-scroll ---
+        //const wasUserScrolling = isUserScrolling; // Capture state before changing
+        isUserScrolling = false;
+        // Remove HideLineBlur class ONLY if we were user scrolling
+        //if (wasUserScrolling) {
+        const lyricsContent = PageContainer?.querySelector(".LyricsContainer .LyricsContent");
+        if (lyricsContent) {
+          lyricsContent.classList.remove("HideLineBlur");
+        } else {
+          console.warn(
+            "SpicyLyrics: Could not find .LyricsContent in ScrollToActiveLine to remove HideLineBlur."
+          );
+        }
+        //}
+        // Scroll if the line is different from the last auto-scrolled line
+        if (!isSameLine) {
+          lastLine = LineElem;
+          const Scroll = () => {
+            ScrollTo(container, LineElem, false, GetScrollType(), currentLine._LineIndex);
+            scrolledToLastLine = false;
+            scrolledToFirstLine = false;
+          };
+          if (
+            Lines[currentLine._LineIndex - 1] &&
+            Lines[currentLine._LineIndex - 1].DotLine === true
+          ) {
+            setTimeout(Scroll, 240);
+          } else {
+            Scroll();
+          }
+        }
+        // --- END REVISED LOGIC ---
+      }
+    }
+  }
+  //}
+}
+
+// Function to queue a force scroll for the next frame
+export function QueueForceScroll() {
+  forceScrollQueued = true;
+}
+
+export function QueueSmoothForceScroll() {
+  smoothForceScrollQueued = true;
+}
+
+export function ResetLastLine() {
+  lastLine = null;
+  lastViewportLine = null;
+  lastViewportContainer = null;
+  lastIsLineInViewport = false;
+  lastViewportCheckTime = 0;
+  isUserScrolling = false;
+  lastUserScrollTime = 0;
+  lastPosition = 0;
+  forceScrollQueued = false;
+  smoothForceScrollQueued = false;
+  scrolledToLastLine = false;
+  scrolledToFirstLine = false;
+  // Also disconnect observer on reset if needed, though setup handles disconnect now
+  // lyricsContentObserver.disconnect();
+}
+
+// --- NEW: Cleanup Function ---
+export function CleanupScrollEvents() {
+  // Remove scroll listeners
+  const scrollElement = currentSimpleBarInstance?.getScrollElement();
+  if (scrollElement) {
+    if (wheelHandler) {
+      scrollElement.removeEventListener("wheel", wheelHandler);
+    }
+    if (touchMoveHandler) {
+      scrollElement.removeEventListener("touchmove", touchMoveHandler);
+    }
+  }
+
+  // Disconnect observer
+  lyricsContentObserver?.disconnect();
+
+  // Remove window listeners
+  window.removeEventListener("focus", ResetLastLine);
+  window.removeEventListener("resize", ResetLastLine);
+
+  // Reset module variables
+  currentSimpleBarInstance = null;
+  wheelHandler = null;
+  touchMoveHandler = null;
+  forceScrollQueued = false; // Reset force scroll queue
+  smoothForceScrollQueued = false;
+  scrolledToLastLine = false;
+  scrolledToFirstLine = false;
+  //console.log("SpicyLyrics scroll events cleaned up."); // Optional log
+}
+// --- END NEW ---

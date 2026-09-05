@@ -1,0 +1,30 @@
+declare module "d3-ease" {
+  export function easeSinOut(t: number): number;
+  export function easeSinIn(t: number): number;
+  export function easeSinInOut(t: number): number;
+  export function easeLinear(t: number): number;
+  export function easeQuadIn(t: number): number;
+  export function easeQuadOut(t: number): number;
+  export function easeQuadInOut(t: number): number;
+  export function easeCubicIn(t: number): number;
+  export function easeCubicOut(t: number): number;
+  export function easeCubicInOut(t: number): number;
+  export function easePolyIn(t: number): number;
+  export function easePolyOut(t: number): number;
+  export function easePolyInOut(t: number): number;
+  export function easeExpIn(t: number): number;
+  export function easeExpOut(t: number): number;
+  export function easeExpInOut(t: number): number;
+  export function easeCircleIn(t: number): number;
+  export function easeCircleOut(t: number): number;
+  export function easeCircleInOut(t: number): number;
+  export function easeElasticIn(t: number): number;
+  export function easeElasticOut(t: number): number;
+  export function easeElasticInOut(t: number): number;
+  export function easeBackIn(t: number): number;
+  export function easeBackOut(t: number): number;
+  export function easeBackInOut(t: number): number;
+  export function easeBounceIn(t: number): number;
+  export function easeBounceOut(t: number): number;
+  export function easeBounceInOut(t: number): number;
+}

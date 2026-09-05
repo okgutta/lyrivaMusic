@@ -1,0 +1,1318 @@
+/* ── Settings Panel — Lyra Console（Modern Dark 玻璃） ────────────────
+   设计语言：电影感暗色 + 分层玻璃 + 靛紫点缀（灵感检索：Music Streaming
+   产品模式 → Dark OLED + Glassmorphism + Modern Dark Cinema）。
+   - 面板接管弹窗玻璃底（隐藏弹窗头，侧栏通铺到边缘），不再是
+     "弹窗里的文档"，而是一台完整的控制台。
+   - 分组 = 玻璃卡（白 5% 渐变面 + 顶部高光 + 柔和投影），行内 inset
+     hairline 分隔；导航/分段/滑块/开关共用一套靛紫 accent 体系。
+   - 微交互：页面淡入上移、开关弹性、分段交叉淡化；reduced-motion 全关。 */
+
+/* ===== 面板作用域 tokens（挂在渲染容器与根上，全部 sl-sp 规则只读这些；
+   .sl-sp-panel 兜底覆盖外部直开的详情页，它们没有 .sl-sp-root 祖先） ===== */
+.sl-sp-panel,
+.sl-sp-root {
+  --slsp-accent: #6e63f0; /* 填充：开关 ON / 滑块填充 / 渐变端 */
+  --slsp-accent-deep: #5b51e0; /* 渐变深端：主按钮底（白字对比达标） */
+  --slsp-accent-hover: #7d73ff;
+  --slsp-accent-text: #b7aeff; /* 靛紫文本/图标：暗玻璃上 ≥4.5:1 */
+  --slsp-accent-glow: rgba(110, 99, 240, 0.45);
+  --slsp-accent-tint: rgba(110, 99, 240, 0.16);
+  --slsp-accent-ring: rgba(110, 99, 240, 0.5);
+  --slsp-well: rgba(0, 0, 0, 0.3); /* 输入井 / 分段轨 */
+  --slsp-hairline: rgba(255, 255, 255, 0.08);
+  --slsp-hairline-strong: rgba(255, 255, 255, 0.14);
+  --slsp-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --slsp-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ===== 弹窗尺寸与链路（侧栏 + 内容通铺整块玻璃） ===== */
+sl-generic-modal.SpicyLyricsModal .sl-modal-overlay .slmodal-settingsPanel > div {
+  width: min(78vw, 920px);
+  height: min(76vh, 600px);
+  container: slsettings / inline-size;
+}
+
+/* 弹窗头（"Lyra 设置" + 关闭）由面板根上的 hidden-modal-header-style 隐藏，
+   关闭入口整合进面板内容区右上角。standalone 详情页（外部直开）不带该类，
+   仍走弹窗头。 */
+sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .sl-modal-main-section {
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 面板模式：去掉 main-section 内边距，侧栏玻璃铺到弹窗边缘；
+   圆角与玻璃板一致，侧栏底色在边缘被裁齐 */
+sl-generic-modal.SpicyLyricsModal
+  .slmodal-settingsPanel:has(.hidden-modal-header-style)
+  .sl-modal-main-section {
+  padding: 0;
+  border-radius: var(--radius-lg);
+}
+
+sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .sl-modal-main-section main.sl-modal-content {
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 面板容器（settings.ts 的 renderPanel 根）——注意与右侧内容块 .sl-sp-page 区分 */
+sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .sl-sp-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== 根布局：侧栏 + 内容 ===== */
+.sl-sp-root {
+  position: relative;
+  z-index: 0;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row !important;
+  gap: 0;
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+/* 内容区顶部的靛紫氛围光：给玻璃底一点纵深，不参与交互 */
+.sl-sp-root::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 240px;
+  background: radial-gradient(
+    560px 220px at 62% 0%,
+    rgba(110, 99, 240, 0.16),
+    transparent 72%
+  );
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* ── 侧栏：通铺暗色玻璃竖片 ── */
+.sl-sp-sidebar {
+  flex-shrink: 0;
+  width: 208px;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4) var(--space-2) var(--space-3);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.07));
+  border-right: 1px solid var(--slsp-hairline);
+}
+
+.sl-sp-sidebar-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-2) var(--space-5);
+}
+
+/* 品牌铭牌：靛紫 tint 底 + 歌词脉冲纹 */
+.sl-sp-brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: linear-gradient(160deg, var(--slsp-accent-tint), rgba(110, 99, 240, 0.06));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 0 0 1px rgba(110, 99, 240, 0.28);
+  color: var(--slsp-accent-text);
+}
+
+.sl-sp-sidebar-title {
+  margin: 0;
+  font-size: 1.02rem !important;
+  font-weight: var(--w-bold);
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary);
+  line-height: 1.2;
+}
+
+.sl-sp-sidebar-subtitle {
+  margin: 1px 0 0;
+  font-size: var(--text-footnote-size) !important;
+  color: var(--color-text-secondary);
+  line-height: 1.3;
+}
+
+.sl-sp-sidebar-nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0 2px;
+  scrollbar-width: none;
+  transition: opacity 0.2s var(--slsp-ease-out);
+}
+
+/* 搜索时侧栏退后一步，视觉焦点让给结果 */
+.sl-sp-root--searching .sl-sp-sidebar-nav {
+  opacity: 0.45;
+}
+
+.sl-sp-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 11px;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  color: var(--color-text-secondary);
+  font-size: var(--text-body-size) !important;
+  font-weight: var(--w-medium);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.18s var(--slsp-ease-out),
+    color 0.18s var(--slsp-ease-out),
+    box-shadow 0.18s var(--slsp-ease-out);
+
+  svg {
+    flex-shrink: 0;
+    color: inherit;
+    opacity: 0.8;
+    transition: color 0.18s var(--slsp-ease-out), opacity 0.18s var(--slsp-ease-out);
+  }
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--color-text-primary);
+
+    svg {
+      opacity: 1;
+    }
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 1px var(--slsp-hairline-strong);
+  }
+
+  /* 激活态：靛紫 tint 玻璃胶囊 + 描边微光，图标转 accent */
+  &.sl-sp-sidebar-item--active {
+    background: linear-gradient(180deg, var(--slsp-accent-tint), rgba(110, 99, 240, 0.1));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.1),
+      inset 0 0 0 1px rgba(110, 99, 240, 0.32);
+    color: #ffffff;
+
+    svg {
+      color: var(--slsp-accent-text);
+      opacity: 1;
+    }
+  }
+}
+
+/* 版本铭牌：玻璃小卡 + 状态点 */
+.sl-sp-sidebar-version {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: var(--space-4);
+  padding: 8px 11px;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px var(--slsp-hairline);
+  border-radius: 10px;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-footnote-size) !important;
+  font-weight: var(--w-medium);
+  font-variant-numeric: tabular-nums;
+  user-select: text;
+}
+
+.sl-sp-version-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--slsp-accent-text);
+  box-shadow: 0 0 8px var(--slsp-accent-glow);
+}
+
+/* ── 内容区 ── */
+.sl-sp-content {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--space-5);
+}
+
+/* 集成关闭按钮：面板模式下弹窗头已隐藏，这里常驻右上角 */
+.sl-sp-close {
+  position: absolute;
+  top: 13px;
+  right: 8px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 0 0 1px var(--slsp-hairline);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    background 0.15s var(--slsp-ease-out),
+    color 0.15s var(--slsp-ease-out),
+    transform 0.12s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.13);
+    color: var(--color-text-primary);
+  }
+
+  &:active {
+    transform: scale(0.92);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 1px var(--slsp-hairline-strong);
+  }
+}
+
+.sl-sp-toolbar {
+  flex-shrink: 0;
+  padding: var(--space-3) 44px var(--space-2) 0;
+}
+
+/* 搜索：玻璃胶囊，聚焦时 ring 转 accent */
+.sl-sp-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 36px;
+  padding: 0 var(--space-3);
+  background: var(--slsp-well);
+  box-shadow: inset 0 0 0 1px var(--slsp-hairline);
+  border-radius: 10px;
+  transition:
+    box-shadow 0.15s var(--slsp-ease-out),
+    background 0.15s var(--slsp-ease-out);
+
+  &:focus-within {
+    background: rgba(0, 0, 0, 0.38);
+    box-shadow:
+      inset 0 0 0 1px var(--slsp-hairline-strong),
+      0 0 0 2px var(--slsp-accent-ring);
+  }
+
+  .sl-sp-search-icon {
+    color: var(--color-text-tertiary);
+    flex-shrink: 0;
+    transition: color 0.15s ease;
+  }
+
+  &:focus-within .sl-sp-search-icon {
+    color: var(--slsp-accent-text);
+  }
+
+  .sl-sp-search {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--color-text-primary);
+    font-size: var(--text-body-size) !important;
+    font-weight: var(--w-regular);
+    min-width: 0;
+
+    &::placeholder {
+      color: var(--color-text-tertiary);
+    }
+  }
+
+  .sl-sp-search-clear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.2);
+      color: var(--color-text-primary);
+    }
+  }
+}
+
+/* 滚动内容区：唯一滚动处 */
+.sl-sp-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 2px var(--space-4) 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+/* 旧引擎回退：不支持 scrollbar-color 时用 webkit 伪元素描一层细滚动条 */
+.sl-sp-scroll::-webkit-scrollbar,
+.sl-sp-detail-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sl-sp-scroll::-webkit-scrollbar-thumb,
+.sl-sp-detail-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 3px;
+}
+
+.sl-sp-scroll::-webkit-scrollbar-track,
+.sl-sp-detail-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ── 页面标题 / 描述 ──
+   页头是内容的锚点：标题收敛到 1.3rem（紧凑控制台尺度），
+   与下方分组保持 20px 呼吸，描述行高放宽到 1.45。 */
+.sl-sp-page-title {
+  margin: var(--space-3) 0 0;
+  font-size: 1.3rem !important;
+  font-weight: var(--w-bold);
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--color-text-primary);
+}
+
+.sl-sp-page-desc {
+  margin: 4px 0 0;
+  font-size: var(--text-footnote-size) !important;
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+}
+
+/* 搜索结果页：分组直接平铺（无 page-groups 包裹），补上组间距 */
+.sl-sp-search-results > .sl-sp-section {
+  margin-top: var(--space-5);
+}
+
+/* 搜索结果：整组无命中行时隐藏（标题 + 空卡一起消失，旧版会留下空壳） */
+.sl-sp-search-results > .sl-sp-section:not(:has(.sl-sp-row, .sl-sp-nav-row)) {
+  display: none;
+}
+
+.sl-sp-search-results > .sl-sp-empty {
+  margin-top: var(--space-4);
+}
+
+.sl-sp-page-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin-top: var(--space-4);
+}
+
+/* ── 分组：玻璃卡 + overline 小标题（accent 点） ── */
+.sl-sp-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* 标题文字起点 = dot(4px) + gap(6px) + margin(6px) = 16px，与卡内行标签对齐 */
+.sl-sp-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: var(--space-1) 6px 0;
+  font-size: var(--text-footnote-size) !important;
+  font-weight: var(--w-semibold);
+  color: var(--color-text-secondary);
+  letter-spacing: 0.06em;
+
+  &::before {
+    content: "";
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--slsp-accent-text);
+    box-shadow: 0 0 6px var(--slsp-accent-glow);
+    flex-shrink: 0;
+  }
+}
+
+.sl-sp-section-desc {
+  margin: 0 6px;
+  font-size: var(--text-footnote-size) !important;
+  color: var(--color-text-tertiary);
+  line-height: 1.45;
+}
+
+/* 分组容器：白 5% 玻璃渐变面 + 顶部高光 + 柔和落影 */
+.sl-sp-group {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.028));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 10px 28px -14px rgba(0, 0, 0, 0.45);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+/* ── Settings Row：标题+描述 左，控件 右 ── */
+.sl-sp-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 56px;
+  padding: 12px 16px;
+  position: relative;
+}
+
+/* 组内行间 inset hairline（从标签起点起笔，现代列表惯例） */
+.sl-sp-group .sl-sp-row + .sl-sp-row::before,
+.sl-sp-group .sl-sp-row + .sl-sp-nav-row::before,
+.sl-sp-group .sl-sp-nav-row + .sl-sp-row::before,
+.sl-sp-group .sl-sp-nav-row + .sl-sp-nav-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 0;
+  height: 1px;
+  background: var(--slsp-hairline);
+  pointer-events: none;
+}
+
+/* 堆叠行：标签在上，控件占满下方整行（宽控件如滑块/分段用） */
+.sl-sp-row--stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+
+  .sl-sp-control {
+    width: 100%;
+  }
+
+  .sl-sp-slider {
+    width: 100%;
+  }
+}
+
+.sl-sp-row--nested {
+  padding-left: var(--space-5);
+
+  &::before {
+    left: var(--space-5) !important;
+  }
+
+  .sl-sp-label {
+    font-size: var(--text-body-size) !important;
+    font-weight: var(--w-regular);
+    color: var(--color-text-secondary);
+  }
+
+  .sl-sp-description {
+    font-size: var(--text-footnote-size) !important;
+  }
+}
+
+.sl-sp-row--disabled {
+  cursor: not-allowed;
+
+  .sl-sp-label-wrap,
+  .sl-sp-control {
+    opacity: 0.45;
+  }
+
+  .sl-sp-control {
+    pointer-events: none;
+  }
+
+  .sl-sp-row-tooltip {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    right: 16px;
+    transform: translateY(4px);
+    background: var(--material-regular-bg);
+    -webkit-backdrop-filter: var(--material-regular-blur);
+    backdrop-filter: var(--material-regular-blur);
+    box-shadow:
+      var(--liquid-cast-soft),
+      inset 0 0 0 1px var(--hairline);
+    color: var(--color-text-primary);
+    font-size: var(--text-footnote-size) !important;
+    font-weight: var(--w-regular);
+    padding: 6px 10px;
+    border-radius: 8px;
+    white-space: normal;
+    max-width: min(320px, 60vw);
+    pointer-events: none;
+    opacity: 0;
+    z-index: 200;
+    transition:
+      opacity 0.15s ease,
+      transform 0.15s ease;
+  }
+
+  &:hover .sl-sp-row-tooltip,
+  &:focus-within .sl-sp-row-tooltip {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sl-sp-label-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.sl-sp-label {
+  font-size: var(--text-body-size) !important;
+  font-weight: var(--w-medium);
+  color: var(--color-text-primary);
+  line-height: 1.35;
+}
+
+.sl-sp-description {
+  font-size: var(--text-footnote-size) !important;
+  font-weight: var(--w-regular);
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+}
+
+.sl-sp-control {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* ── Toggle：靛紫 ON + 辉光，旋钮弹性回位 ── */
+.sl-sp-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  width: 42px;
+  height: 25px;
+
+  input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+  }
+
+  .sl-sp-toggle-track {
+    width: 42px;
+    height: 25px;
+    background: rgba(255, 255, 255, 0.16);
+    box-shadow: inset 0 0 0 1px var(--slsp-hairline);
+    border-radius: 13px;
+    transition: background 0.18s ease, box-shadow 0.18s ease;
+    position: relative;
+
+    &::after {
+      content: "";
+      position: absolute;
+      top: 2.5px;
+      left: 2.5px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.35);
+      transition: transform 0.24s var(--slsp-ease-spring);
+    }
+  }
+
+  input:checked + .sl-sp-toggle-track {
+    background: linear-gradient(180deg, var(--slsp-accent-hover), var(--slsp-accent));
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.14),
+      0 0 14px -3px var(--slsp-accent-glow);
+
+    &::after {
+      transform: translateX(17px);
+    }
+  }
+
+  input:focus-visible + .sl-sp-toggle-track {
+    outline: none;
+    box-shadow:
+      inset 0 0 0 1px var(--slsp-hairline-strong),
+      0 0 0 2px var(--slsp-accent-ring);
+  }
+}
+
+/* ── Segmented：井式轨道，选中项为浮起玻璃拇指 ── */
+.sl-sp-segmented {
+  display: inline-flex;
+  background: var(--slsp-well);
+  box-shadow: inset 0 0 0 1px var(--slsp-hairline);
+  border-radius: 9px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.sl-sp-segmented-item {
+  border: none;
+  background: none;
+  padding: 5px 12px;
+  border-radius: 7px;
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption-size) !important;
+  font-weight: var(--w-medium);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.18s var(--slsp-ease-out),
+    color 0.18s var(--slsp-ease-out),
+    box-shadow 0.18s var(--slsp-ease-out);
+
+  &:hover {
+    color: var(--color-text-primary);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 1px var(--slsp-hairline-strong);
+  }
+
+  &.sl-sp-segmented-item--active {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.08));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.14),
+      inset 0 0 0 1px var(--slsp-hairline),
+      0 2px 8px -2px rgba(0, 0, 0, 0.5);
+    color: #ffffff;
+  }
+}
+
+.sl-sp-segmented--disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* ── Navigation Row：label + 当前值 + chevron ── */
+.sl-sp-nav-row {
+  cursor: pointer;
+  position: relative;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  &:hover .sl-sp-nav-value svg {
+    color: var(--color-text-primary);
+    transform: translateX(1px);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 1px var(--slsp-hairline-strong);
+  }
+}
+
+.sl-sp-nav-value {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  color: var(--color-text-tertiary);
+
+  .sl-sp-nav-value-text {
+    font-size: var(--text-body-size) !important;
+    color: var(--color-text-secondary);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sl-sp-nav-value-text--ok {
+    color: var(--slsp-accent-text);
+  }
+
+  .sl-sp-nav-value-text--unset {
+    color: var(--color-text-tertiary);
+  }
+
+  svg {
+    flex-shrink: 0;
+    transition: color 0.15s ease, transform 0.15s var(--slsp-ease-out);
+  }
+}
+
+/* ── Select / Input（二级页内使用）：井式底 + accent 聚焦环 ── */
+.sl-sp-select {
+  background: var(--slsp-well);
+  color: var(--color-text-primary);
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--slsp-hairline);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: var(--text-caption-size) !important;
+  font-weight: var(--w-medium);
+  cursor: pointer;
+  outline: none;
+  transition:
+    box-shadow 0.15s var(--slsp-ease-out),
+    background 0.15s ease;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.38);
+  }
+
+  &:focus-visible {
+    box-shadow:
+      inset 0 0 0 1px var(--slsp-hairline-strong),
+      0 0 0 2px var(--slsp-accent-ring);
+  }
+
+  option {
+    background: rgb(30 30 32 / 0.98);
+    color: rgba(255, 255, 255, 0.92);
+  }
+}
+
+.sl-sp-input {
+  background: var(--slsp-well);
+  color: var(--color-text-primary);
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--slsp-hairline);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: var(--text-body-size) !important;
+  font-weight: var(--w-regular);
+  outline: none;
+  width: 100%;
+  min-width: 180px;
+  transition: box-shadow 0.15s var(--slsp-ease-out), background 0.15s ease;
+
+  &::placeholder {
+    color: var(--color-text-tertiary);
+  }
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.38);
+  }
+
+  &:focus {
+    background: rgba(0, 0, 0, 0.38);
+    box-shadow:
+      inset 0 0 0 1px var(--slsp-hairline-strong),
+      0 0 0 2px var(--slsp-accent-ring);
+  }
+}
+
+/* ── 滑块：靛紫渐变填充 + 辉光拇指 ── */
+.sl-sp-slider {
+  width: 220px;
+}
+
+.sl-sp-slider-track-wrap {
+  position: relative;
+  height: 22px;
+  display: flex;
+  align-items: center;
+}
+
+.sl-sp-slider-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--slsp-well);
+  box-shadow: inset 0 0 0 1px var(--slsp-hairline);
+}
+
+.sl-sp-slider-fill {
+  position: absolute;
+  height: 5px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--slsp-accent-deep), var(--slsp-accent-hover));
+  box-shadow: 0 0 10px -2px var(--slsp-accent-glow);
+  pointer-events: none;
+}
+
+.sl-sp-slider-center {
+  position: absolute;
+  width: 1px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+}
+
+.sl-sp-slider-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  margin: 0;
+  appearance: none;
+  background: none;
+  cursor: pointer;
+
+  &::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow:
+      0 1px 4px rgba(0, 0, 0, 0.4),
+      0 0 0 1px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    transition: box-shadow 0.15s ease;
+  }
+
+  &:hover::-webkit-slider-thumb {
+    box-shadow:
+      0 1px 4px rgba(0, 0, 0, 0.4),
+      0 0 0 5px rgba(110, 99, 240, 0.16);
+  }
+
+  &:focus-visible::-webkit-slider-thumb {
+    box-shadow:
+      0 1px 4px rgba(0, 0, 0, 0.4),
+      0 0 0 4px var(--slsp-accent-ring);
+  }
+}
+
+.sl-sp-slider-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 18px;
+}
+
+.sl-sp-slider-value {
+  font-size: var(--text-caption-size) !important;
+  font-weight: var(--w-semibold);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.sl-sp-slider-reset {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: var(--text-caption-size) !important;
+  font-weight: var(--w-medium);
+  color: var(--slsp-accent-text);
+  cursor: pointer;
+  transition: color 0.15s ease;
+
+  &:hover {
+    color: #ffffff;
+  }
+}
+
+.sl-sp-slider--disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* ── 按钮：玻璃副按钮 + 靛紫渐变主按钮 ── */
+.sl-sp-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: var(--text-caption-size) !important;
+  font-weight: var(--w-semibold);
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 0 0 1px var(--slsp-hairline);
+  color: var(--color-text-primary);
+  transition:
+    background 0.15s var(--slsp-ease-out),
+    box-shadow 0.15s var(--slsp-ease-out),
+    transform 0.12s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  &:active {
+    transform: scale(0.97);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  &.sl-sp-btn--primary {
+    background: linear-gradient(180deg, var(--slsp-accent-hover), var(--slsp-accent-deep));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      0 4px 14px -4px var(--slsp-accent-glow);
+    color: #ffffff;
+
+    &:hover {
+      background: linear-gradient(180deg, #8a81ff, #6e63f0);
+    }
+
+    &:active {
+      transform: translateY(1px) scale(0.98);
+    }
+
+    &:disabled {
+      opacity: 0.4;
+    }
+  }
+}
+
+.sl-sp-refresh {
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 0 0 1px var(--slsp-hairline);
+  color: var(--color-text-primary);
+  border: none;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: var(--text-caption-size) !important;
+  font-weight: var(--w-medium);
+  cursor: pointer;
+  transition:
+    background 0.15s var(--slsp-ease-out),
+    transform 0.12s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  &:active {
+    transform: scale(0.97);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.sl-sp-inline-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+
+  .sl-sp-select {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+/* 详情页动作行：按钮组靠右但不挤压左侧标签 */
+.sl-sp-inline-controls.sl-sp-detail-actions {
+  width: auto;
+}
+
+/* ── 二级页（详情页） ── */
+.sl-sp-detail {
+  display: flex;
+  flex-direction: column;
+}
+
+.sl-sp-detail-header {
+  margin-bottom: var(--space-1);
+  /* 详情页没有搜索栏提供顶部留白；7px = 关闭按钮 top 13px - 返回按钮自身 6px 内边距，
+     让返回行与右上角关闭按钮水平对齐 */
+  padding-top: 7px;
+  padding-right: 44px; /* 让出右上角常驻关闭按钮 */
+}
+
+.sl-sp-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  border: none;
+  background: none;
+  padding: 6px 10px 6px 6px;
+  border-radius: 8px;
+  color: var(--color-text-secondary);
+  font-size: var(--text-body-size) !important;
+  font-weight: var(--w-medium);
+  cursor: pointer;
+  transition:
+    background 0.15s var(--slsp-ease-out),
+    color 0.15s var(--slsp-ease-out);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--color-text-primary);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 1px var(--slsp-hairline-strong);
+  }
+}
+
+.sl-sp-detail-title {
+  margin: var(--space-2) 0 0;
+  font-size: 1.3rem !important;
+  font-weight: var(--w-bold);
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--color-text-primary);
+}
+
+.sl-sp-detail-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-top: var(--space-3);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+.sl-sp-detail-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  width: 100%;
+}
+
+/* 二级页选择列表行（翻译语言） */
+.sl-sp-choice-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 14px;
+  background: none;
+  border: none;
+  color: var(--color-text-primary);
+  font-size: var(--text-body-size) !important;
+  font-weight: var(--w-regular);
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.15s var(--slsp-ease-out);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 1px var(--slsp-hairline-strong);
+  }
+
+  &.sl-sp-choice-row--active {
+    color: var(--slsp-accent-text);
+    font-weight: var(--w-semibold);
+    background: var(--slsp-accent-tint);
+  }
+}
+
+.sl-sp-choice-label {
+  flex: 1;
+}
+
+/* 选择列表行间分隔 */
+.sl-sp-group .sl-sp-choice-row + .sl-sp-choice-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 14px;
+  right: 0;
+  height: 1px;
+  background: var(--slsp-hairline);
+  pointer-events: none;
+}
+
+.sl-sp-group .sl-sp-choice-row--active + .sl-sp-choice-row::before,
+.sl-sp-group .sl-sp-choice-row + .sl-sp-choice-row--active::before {
+  background: transparent; /* 激活行 tint 底与分隔线相接处让位 */
+}
+
+/* ── 搜索空状态 ── */
+.sl-sp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 44px 16px;
+  text-align: center;
+
+  .sl-sp-empty-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    margin-bottom: var(--space-1);
+    border-radius: 14px;
+    background: var(--slsp-accent-tint);
+    box-shadow: inset 0 0 0 1px rgba(110, 99, 240, 0.28);
+    color: var(--slsp-accent-text);
+  }
+
+  .sl-sp-empty-title {
+    margin: 0;
+    font-size: var(--text-body-size) !important;
+    font-weight: var(--w-medium);
+    color: var(--color-text-primary);
+  }
+
+  .sl-sp-empty-hint {
+    margin: 0 0 var(--space-2);
+    font-size: var(--text-footnote-size) !important;
+    color: var(--color-text-tertiary);
+  }
+}
+
+/* ===== 微交互：页面/分组入场（React 重挂载时播放） ===== */
+@keyframes slsp-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sl-sp-page,
+.sl-sp-detail,
+.sl-sp-search-results {
+  animation: slsp-in 0.26s var(--slsp-ease-out) both;
+}
+
+.sl-sp-page .sl-sp-section,
+.sl-sp-search-results .sl-sp-section {
+  animation: slsp-in 0.3s var(--slsp-ease-out) both;
+}
+
+.sl-sp-page .sl-sp-section:nth-child(2),
+.sl-sp-search-results .sl-sp-section:nth-of-type(2) {
+  animation-delay: 40ms;
+}
+
+.sl-sp-page .sl-sp-section:nth-child(3),
+.sl-sp-search-results .sl-sp-section:nth-of-type(3) {
+  animation-delay: 80ms;
+}
+
+.sl-sp-page .sl-sp-section:nth-child(n + 4),
+.sl-sp-search-results .sl-sp-section:nth-of-type(n + 4) {
+  animation-delay: 120ms;
+}
+
+/* ── 动效敏感环境：入场/弹性/过渡全部停掉 ── */
+@media (prefers-reduced-motion: reduce) {
+  .sl-sp-page,
+  .sl-sp-detail,
+  .sl-sp-search-results,
+  .sl-sp-page .sl-sp-section,
+  .sl-sp-search-results .sl-sp-section {
+    animation: none;
+  }
+
+  .sl-sp-toggle-track,
+  .sl-sp-toggle-track::after,
+  .sl-sp-slider-fill,
+  .sl-sp-slider-input::-webkit-slider-thumb,
+  .sl-sp-segmented-item,
+  .sl-sp-nav-value svg {
+    transition: none;
+  }
+}
+
+/* ===== 窄弹窗回退：侧栏变顶栏（横向滑动 chips） =====
+   用容器查询测量弹窗自身宽度（slsettings container），不受窗口/DPI 影响。 */
+@container slsettings (max-width: 480px) {
+  sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .sl-sp-root {
+    /* 基础规则的 row 带 !important（对抗 Spotify 工具类），这里必须同样 important 才能翻成纵向 */
+    flex-direction: column !important;
+  }
+
+  .sl-sp-root::before {
+    background: radial-gradient(80% 180px at 50% 0%, rgba(110, 99, 240, 0.14), transparent 72%);
+  }
+
+  sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .sl-sp-sidebar {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    border-right: none;
+    border-bottom: 1px solid var(--slsp-hairline);
+    padding: var(--space-2) var(--space-3);
+    gap: var(--space-2);
+  }
+
+  .sl-sp-sidebar-head,
+  .sl-sp-sidebar-version {
+    display: none;
+  }
+
+  .sl-sp-sidebar-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 4px;
+  }
+
+  .sl-sp-sidebar-item {
+    flex-shrink: 0;
+    width: auto;
+    border-radius: 999px;
+    padding: 6px 12px;
+  }
+
+  .sl-sp-content {
+    padding: 0 var(--space-4);
+  }
+
+  .sl-sp-close {
+    top: 11px;
+    right: 4px;
+  }
+
+  .sl-sp-page-title {
+    font-size: 1.2rem !important;
+  }
+}

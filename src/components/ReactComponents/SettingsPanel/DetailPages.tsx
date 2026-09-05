@@ -1,0 +1,477 @@
+import { useStore } from "@nanostores/react";
+import { useEffect, useState } from "react";
+import {
+  $customApiBaseUrl,
+  $customApiKey,
+  $customApiModel,
+  $deepSeekApiKey,
+  $deepSeekModel,
+  $deepSeekModels,
+  $deepSeekModelsError,
+  $deepSeekModelsLoading,
+  $geniusApiToken,
+  $openaiApiKey,
+  $openaiModel,
+  $translationProvider,
+  $translationTargetLang,
+} from "../../../utils/stores.ts";
+import { fetchModelsForProvider } from "../../../utils/Lyrics/Translate/providers.ts";
+import { Row, Select, Section, Input } from "./components.tsx";
+
+/** 二级页外壳：返回按钮 + 内容滚动 */
+function DetailShell({ title, onBack, children }: { title: string; onBack: () => void; children: React.ReactNode }) {
+  return (
+    <div className="sl-sp-detail">
+      <div className="sl-sp-detail-header">
+        <button type="button" className="sl-sp-back-btn" onClick={onBack} aria-label="返回设置">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 14 14"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M8.5 2.5L4 7l4.5 4.5"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          设置
+        </button>
+      </div>
+      <h2 className="sl-sp-detail-title">{title}</h2>
+      <div className="sl-sp-detail-body">{children}</div>
+    </div>
+  );
+}
+
+/** 保存/清除 Genius Token 的通用反馈 */
+function notify(message: string): void {
+  try {
+    Spicetify.showNotification(message);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function DetailGeniusToken({ onBack }: { onBack: () => void }) {
+  const geniusApiToken = useStore($geniusApiToken);
+  const [draft, setDraft] = useState(geniusApiToken);
+
+  return (
+    <DetailShell title="Genius API Token" onBack={onBack}>
+      <Section>
+        <Row
+          label="Token"
+          description="在 genius.com/api-clients 创建 Client 后获取 Access Token"
+          stacked
+        >
+          <Input
+            type="password"
+            value={draft}
+            placeholder="Genius Access Token"
+            onChange={setDraft}
+          />
+        </Row>
+      </Section>
+      <Section>
+        <Row label="操作">
+          <div className="sl-sp-inline-controls sl-sp-detail-actions">
+            <button
+              type="button"
+              className="sl-sp-btn sl-sp-btn--primary"
+              disabled={!draft.trim()}
+              onClick={() => {
+                $geniusApiToken.set(draft.trim());
+                notify("已保存 Genius API Token");
+              }}
+            >
+              保存
+            </button>
+            <button
+              type="button"
+              className="sl-sp-btn"
+              disabled={!geniusApiToken}
+              onClick={() => {
+                $geniusApiToken.set("");
+                setDraft("");
+                notify("已清除 Genius API Token");
+              }}
+            >
+              清除 Token
+            </button>
+          </div>
+        </Row>
+      </Section>
+    </DetailShell>
+  );
+}
+
+const LANG_OPTIONS = [
+  "zh-CN",
+  "zh-TW",
+  "en",
+  "ja",
+  "ko",
+  "fr",
+  "de",
+  "es",
+  "pt",
+  "ru",
+  "th",
+  "vi",
+  "id",
+  "tr",
+  "it",
+  "nl",
+];
+const LANG_LABELS: Record<string, string> = {
+  "zh-CN": "简体中文",
+  "zh-TW": "繁體中文",
+  en: "English",
+  ja: "日本語",
+  ko: "한국어",
+  fr: "Français",
+  de: "Deutsch",
+  es: "Español",
+  pt: "Português",
+  ru: "Русский",
+  th: "ไทย",
+  vi: "Tiếng Việt",
+  id: "Bahasa Indonesia",
+  tr: "Türkçe",
+  it: "Italiano",
+  nl: "Nederlands",
+};
+
+export function DetailTranslationLanguage({ onBack }: { onBack: () => void }) {
+  const target = useStore($translationTargetLang);
+
+  return (
+    <DetailShell title="翻译目标语言" onBack={onBack}>
+      <Section>
+        {LANG_OPTIONS.map((lang) => {
+          const active = lang === target;
+          return (
+            <button
+              key={lang}
+              type="button"
+              className={`sl-sp-choice-row${active ? " sl-sp-choice-row--active" : ""}`}
+              onClick={() => $translationTargetLang.set(lang)}
+            >
+              <span className="sl-sp-choice-label">{LANG_LABELS[lang] ?? lang}</span>
+              {active && (
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.5 7.5L5.5 10.5L11.5 3.5"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+            </button>
+          );
+        })}
+      </Section>
+    </DetailShell>
+  );
+}
+
+export function DetailDeepSeekKey({ onBack }: { onBack: () => void }) {
+  const deepSeekApiKey = useStore($deepSeekApiKey);
+  const [draft, setDraft] = useState(deepSeekApiKey);
+
+  return (
+    <DetailShell title="DeepSeek API Key" onBack={onBack}>
+      <Section>
+        <Row
+          label="API Key"
+          description="在 platform.deepseek.com 创建 API Key"
+          stacked
+        >
+          <Input
+            type="password"
+            value={draft}
+            placeholder="sk-..."
+            onChange={setDraft}
+          />
+        </Row>
+      </Section>
+      <Section>
+        <Row label="操作">
+          <div className="sl-sp-inline-controls sl-sp-detail-actions">
+            <button
+              type="button"
+              className="sl-sp-btn sl-sp-btn--primary"
+              disabled={!draft.trim()}
+              onClick={() => {
+                $deepSeekApiKey.set(draft.trim());
+                notify("已保存 DeepSeek API Key");
+              }}
+            >
+              保存
+            </button>
+            <button
+              type="button"
+              className="sl-sp-btn"
+              disabled={!deepSeekApiKey}
+              onClick={() => {
+                $deepSeekApiKey.set("");
+                setDraft("");
+                notify("已清除 DeepSeek API Key");
+              }}
+            >
+              清除 API Key
+            </button>
+          </div>
+        </Row>
+      </Section>
+    </DetailShell>
+  );
+}
+
+export function DetailTranslationModel({ onBack }: { onBack: () => void }) {
+  const provider = useStore($translationProvider);
+  const deepSeekModel = useStore($deepSeekModel);
+  const deepSeekModels = useStore($deepSeekModels);
+  const modelsLoading = useStore($deepSeekModelsLoading);
+  const modelsError = useStore($deepSeekModelsError);
+  const deepSeekApiKey = useStore($deepSeekApiKey);
+  const openaiApiKey = useStore($openaiApiKey);
+  const openaiModel = useStore($openaiModel);
+  const customApiBaseUrl = useStore($customApiBaseUrl);
+  const customApiKey = useStore($customApiKey);
+  const customApiModel = useStore($customApiModel);
+  const [refreshTick, setRefreshTick] = useState(0);
+
+  const isCustom = provider === "custom";
+  const hasKey =
+    provider === "deepseek"
+      ? Boolean(deepSeekApiKey.trim())
+      : provider === "openai"
+        ? Boolean(openaiApiKey.trim())
+        : Boolean(customApiBaseUrl.trim() && customApiKey.trim() && customApiModel.trim());
+  const providerLabel = provider === "deepseek" ? "DeepSeek" : provider === "openai" ? "ChatGPT" : "自定义 API";
+
+  // deepseek/openai：填好 Key 后自动拉取可用模型列表（防抖 600ms）；custom 为自由输入
+  useEffect(() => {
+    if (isCustom) return;
+    const key = (provider === "deepseek" ? deepSeekApiKey : openaiApiKey).trim();
+    if (!key) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      $deepSeekModelsLoading.set(true);
+      $deepSeekModelsError.set(null);
+      fetchModelsForProvider(key)
+        .then((ids: string[]) => {
+          if (!cancelled && ids.length) $deepSeekModels.set(ids);
+        })
+        .catch((err: unknown) => {
+          if (!cancelled) {
+            $deepSeekModelsError.set(err instanceof Error ? err.message : String(err));
+          }
+        })
+        .finally(() => {
+          if (!cancelled) $deepSeekModelsLoading.set(false);
+        });
+    }, 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [provider, deepSeekApiKey, openaiApiKey, refreshTick, isCustom]);
+
+  const currentModel =
+    provider === "deepseek" ? deepSeekModel : provider === "openai" ? openaiModel : customApiModel;
+  const setModel = (v: string) => {
+    if (provider === "deepseek") $deepSeekModel.set(v);
+    else if (provider === "openai") $openaiModel.set(v);
+    else $customApiModel.set(v);
+  };
+
+  const modelOptions = isCustom
+    ? []
+    : deepSeekModels.includes(currentModel)
+      ? deepSeekModels
+      : [...deepSeekModels, currentModel];
+
+  const modelDescription = !hasKey
+    ? `请先配置 ${providerLabel} API Key`
+    : isCustom
+      ? "输入你的 API 所支持的模型名称"
+      : modelsLoading
+        ? `正在从 ${providerLabel} 获取模型列表…`
+        : modelsError
+          ? "模型列表获取失败，可点「刷新」重试"
+          : `从 ${providerLabel} API 读取的可用模型；点「刷新」重新获取`;
+
+  return (
+    <DetailShell title="翻译模型" onBack={onBack}>
+      <Section>
+        <Row
+          label="模型"
+          description={modelDescription}
+          disabled={!hasKey}
+          disabledReason={`请先配置 ${providerLabel} API Key`}
+          stacked
+        >
+          {isCustom ? (
+            <Input value={currentModel} placeholder="模型名称" onChange={(v) => $customApiModel.set(v)} />
+          ) : (
+            <div className="sl-sp-inline-controls">
+              <Select
+                value={currentModel}
+                options={modelOptions}
+                onChange={(v) => setModel(v)}
+                disabled={!hasKey || modelsLoading}
+              />
+              <button
+                type="button"
+                className="sl-sp-refresh"
+                onClick={() => setRefreshTick((t) => t + 1)}
+                disabled={!hasKey || modelsLoading}
+              >
+                刷新
+              </button>
+            </div>
+          )}
+        </Row>
+      </Section>
+    </DetailShell>
+  );
+}
+
+export function DetailOpenAIConfig({ onBack }: { onBack: () => void }) {
+  const openaiApiKey = useStore($openaiApiKey);
+  const [draft, setDraft] = useState(openaiApiKey);
+
+  return (
+    <DetailShell title="ChatGPT API Key" onBack={onBack}>
+      <Section>
+        <Row
+          label="API Key"
+          description="在 platform.openai.com/api-keys 创建 API Key"
+          stacked
+        >
+          <Input
+            type="password"
+            value={draft}
+            placeholder="sk-..."
+            onChange={setDraft}
+          />
+        </Row>
+      </Section>
+      <Section>
+        <Row label="操作">
+          <div className="sl-sp-inline-controls sl-sp-detail-actions">
+            <button
+              type="button"
+              className="sl-sp-btn sl-sp-btn--primary"
+              disabled={!draft.trim()}
+              onClick={() => {
+                $openaiApiKey.set(draft.trim());
+                notify("已保存 ChatGPT API Key");
+              }}
+            >
+              保存
+            </button>
+            <button
+              type="button"
+              className="sl-sp-btn"
+              disabled={!openaiApiKey}
+              onClick={() => {
+                $openaiApiKey.set("");
+                setDraft("");
+                notify("已清除 ChatGPT API Key");
+              }}
+            >
+              清除 API Key
+            </button>
+          </div>
+        </Row>
+      </Section>
+    </DetailShell>
+  );
+}
+
+export function DetailCustomConfig({ onBack }: { onBack: () => void }) {
+  const baseUrl = useStore($customApiBaseUrl);
+  const apiKey = useStore($customApiKey);
+  const model = useStore($customApiModel);
+  const [draftUrl, setDraftUrl] = useState(baseUrl);
+  const [draftKey, setDraftKey] = useState(apiKey);
+  const [draftModel, setDraftModel] = useState(model);
+
+  return (
+    <DetailShell title="自定义 API" onBack={onBack}>
+      <Section>
+        <Row label="API 地址" description="OpenAI 兼容端点的 Base URL（含 /v1）" stacked>
+          <Input
+            value={draftUrl}
+            placeholder="https://api.example.com/v1"
+            onChange={setDraftUrl}
+          />
+        </Row>
+        <Row label="API Key" stacked>
+          <Input
+            type="password"
+            value={draftKey}
+            placeholder="API Key"
+            onChange={setDraftKey}
+          />
+        </Row>
+        <Row label="模型" description="该服务支持的模型名称" stacked>
+          <Input value={draftModel} placeholder="模型名称" onChange={setDraftModel} />
+        </Row>
+      </Section>
+      <Section>
+        <Row label="操作" description="保存以上三项配置">
+          <div className="sl-sp-inline-controls sl-sp-detail-actions">
+            <button
+              type="button"
+              className="sl-sp-btn sl-sp-btn--primary"
+              disabled={!draftUrl.trim() || !draftKey.trim() || !draftModel.trim()}
+              onClick={() => {
+                $customApiBaseUrl.set(draftUrl.trim().replace(/\/+$/, ""));
+                $customApiKey.set(draftKey.trim());
+                $customApiModel.set(draftModel.trim());
+                notify("已保存自定义 API 配置");
+              }}
+            >
+              保存
+            </button>
+            <button
+              type="button"
+              className="sl-sp-btn"
+              disabled={!baseUrl && !apiKey && !model}
+              onClick={() => {
+                $customApiBaseUrl.set("");
+                $customApiKey.set("");
+                $customApiModel.set("");
+                setDraftUrl("");
+                setDraftKey("");
+                setDraftModel("");
+                notify("已清除自定义 API 配置");
+              }}
+            >
+              清除配置
+            </button>
+          </div>
+        </Row>
+      </Section>
+    </DetailShell>
+  );
+}
+

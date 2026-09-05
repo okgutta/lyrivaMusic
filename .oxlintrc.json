@@ -1,0 +1,33 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "env": {
+    "browser": true
+  },
+  "plugins": ["import", "typescript", "unicorn", "oxc"],
+  "ignorePatterns": [
+    "node_modules/**",
+    "dist/**",
+    "dist_legacy/**",
+    "build/**",
+    "builds/**",
+    ".spicetify/**",
+    "public-storage/**",
+    ".tmp/**",
+
+    "src/types/pako.d.ts",
+    "src/types/spicetify.d.ts",
+
+    "src/utils/SpicyHasher.ts",
+
+    "src/utils/Lyrics/Aromanize.ts",
+    "src/utils/Lyrics/Kuromoji.js",
+    "src/utils/Lyrics/GreekRomanization.js"
+  ],
+  "rules": {
+    "no-console": "off",
+    "radix": "off",
+    "@typescript-eslint/no-explicit-any": "off",
+    "import/no-commonjs": "error",
+    "@typescript-eslint/consistent-type-imports": "warn"
+  }
+}
