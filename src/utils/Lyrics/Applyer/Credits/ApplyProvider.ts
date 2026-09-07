@@ -1,14 +1,14 @@
 const ProviderMap: Record<string, string> = {
-    "spt": "Spotify",
-    "aml": "Apple Music",
-    "spl": "Lyra",
-    "ldb": "本地数据库",
-    "ncm": "网易云",
-    "qq": "QQ 音乐",
-    "lrclib": "LRCLIB",
-    "genius": "Genius",
-    "lyriva": "LYRIVA",
-}
+  spt: "Spotify",
+  aml: "Apple Music",
+  spl: "lyrivaMusic",
+  ldb: "本地数据库",
+  ncm: "网易云",
+  qq: "QQ 音乐",
+  lrclib: "LRCLIB",
+  genius: "Genius",
+  lyriva: "LYRIVA",
+};
 
 export function ApplyLyricsProvider(data: any, LyricsContainer: HTMLElement): void {
   if (!data?.source || !LyricsContainer) return;

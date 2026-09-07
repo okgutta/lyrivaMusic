@@ -1,115 +1,103 @@
-# 歌词 API 文档
+# lyrivaMusic 歌词 API 文档
 
-Lyra（Spicy Lyrics）的歌词获取来源、接口与稳定性说明。
+本文档描述 lyrivaMusic 当前的歌词获取管线、服务边界和缓存行为。
 
-## 来源总览
+## 架构总览
 
-| 来源 | 代码位置 | 曲库定位 | 是否需配置 | 稳定性 |
-|---|---|---|---|---|
-| 网易云音乐 | `src/utils/Lyrics/providers/ncm.ts` | 中文歌主力，自带中文翻译 | 否 | 受共享代理限流影响，时好时坏（自动熔断恢复） |
-| QQ 音乐 | `src/utils/Lyrics/providers/qq.ts` | 补网易云版权缺口（如周杰伦），自带翻译 | 否 | 稳定 |
-| Genius | `src/utils/Lyrics/providers/genius.ts` | 外文歌静态歌词 + 翻译覆盖 | 需 Token | 稳定 |
-| LRCLIB | `src/utils/Lyrics/providers/lrclib.ts` | 开源歌词库，外文歌行级同步兜底 | 否 | 稳定 |
+lyrivaMusic 使用两级歌词来源：
 
-匹配策略：四家并行搜索候选 → 统一 Matcher 评分 → 选最高置信度；来源可单独禁用（设置 → 歌词来源）。
+1. **LYRIVA 主源**：内置 `https://api.lyriva.xyz`，通过 `/v1/lyrics` 一次请求获取最终歌词模型。
+2. **Genius 兜底**：LYRIVA 未命中或暂时不可用时，使用用户在设置中配置的 Genius Access Token 搜索静态歌词；只接受 Matcher 判定为 HIGH/GOOD 的候选。
 
----
+设置页不再提供 NCM、QQ、LRCLIB 或 LYRIVA 地址/Key 开关。Genius Token 仍可在「设置 → 歌词来源」中配置。
 
-## 一、网易云音乐（NCM）
-
-三条通道按顺序使用（搜索与歌词均如此），前一条无结果/失败才回退下一条：
-
-### 1. 自建 API 服务器（可选，NeteaseCloudMusicApi 形态）
-
-```
-搜索  GET {base}/search?keywords={kw}&limit=20
-歌词  GET {base}/lyric?id={id}
-```
-
-- **优点**：明文 JSON + 自带 CORS（`Access-Control-Allow-Origin: *`），完全绕开共享代理限流与 EAPI 加密，最稳定
-- **配置**：设置 → 歌词来源 → “网易云 API 服务器”填地址（如 `http://denxero.l.cd`）
-- 注：该入口当前已撤销待命，代码有底稿，需要可快速恢复
-
-### 2. 老接口（默认优先）
-
-```
-搜索  GET https://music.163.com/api/search/get?type=1&s={kw}&limit=20
-歌词  GET https://music.163.com/api/song/lyric?id={id}&lv=-1&kv=-1&tv=-1&yrc=1
-```
-
-- 明文 GET、无加密、快
-- 网易云对其间歇性限流：返回 `{"code":500,"message":"请求失败"}` 或空结果
-
-### 3. EAPI 加密接口（回退）
-
-```
-搜索  POST https://interface.music.163.com/eapi/search/song/list/page
-歌词  POST https://interface.music.163.com/eapi/song/lyric/v1
-```
-
-- 请求体 AES-128-ECB 加密（`params=<大写HEX>`），`e_r=false` 时响应为明文 JSON
-- 携带持久化设备指纹 Cookie（首次生成存 LocalStorage）
-- **无需匿名注册**（实测搜索/歌词空 Cookie 即返回 `code:200`）
-- 限流表现：空响应/429 → 设备指纹轮换重试 2 次 → **指数熔断**（30s→60s→120s→240s 递增，成功重置）
-
-### 关键限制
-
-网易云的两个 API 域名均**不返回 CORS 头**，浏览器直连会被拦截。Spicetify 的 CosmosAsync 对第三方域名强制经 `cors-proxy.spicetify.app` 公共代理转发——**该代理 IP 被网易云限流**，这是“时好时坏”的根源（全球 Spicetify 用户共享同一出口）。客户端无法绕开此传输层限制；自建 API 服务器是根治方案。
-
----
-
-## 二、QQ 音乐
-
-```
-搜索  GET https://c.y.qq.com/soso/fcgi-bin/client_search_cp?w={kw}&format=json&n=20&p=1
-歌词  POST u.y.qq.com/cgi-bin/musicu.fcg（GetPlayLyricInfo，返回 base64 的 LRC + 翻译）
-```
-
-- 免费免登录，搜索接口固定返回 `callback(...)` JSONP 包装
-- 国内曲库覆盖广，中文歌兜底主力
-
----
-
-## 三、Genius
-
-```
-搜索  GET https://api.genius.com/search?q={kw}&access_token={TOKEN}
-歌词  GET https://genius.com/songs/{id}/embed.js（歌词 HTML 藏在 JSON.parse 参数里）
-```
-
-- 需 Genius Access Token（genius.com/api-clients 获取，设置里配置）
-- 外文歌为主
-
----
-
-## 四、LRCLIB
-
-```
-搜索  GET https://lrclib.net/api/search?{params}
-歌词  GET https://lrclib.net/api/get/{id}
-```
-
-- 开源、免费、无需 key、**支持 CORS**
-- 外文歌行级同步的兜底
-
----
-
-## 通用传输层
-
-各 Provider 均遵循同一 HTTP 模式：
+## LYRIVA 主源
 
 ```text
-原生 fetch（浏览器直连，CORS 允许时）
-  ↓ 失败（CORS/网络）
-Spicetify.CosmosAsync（桌面端经 cors-proxy.spicetify.app 代理，可访问任意第三方域名）
+GET https://api.lyriva.xyz/v1/lyrics
 ```
 
-- 请求体加密：网易云用 AES-128-ECB + PKCS7（`src/utils/ncm/crypto.ts`，纯 JS 实现）
-- 统一超时 15s、UTF-8 强制解码、abort 信号透传
-- 歌词文本渲染全部走 `textContent`，无 XSS 风险
+查询参数：
 
----
+- `title`：当前歌曲标题
+- `artist`：艺人名称
+- `album`：专辑名称（可选）
+- `duration`：歌曲时长，单位秒（可选）
+- `isrc`：ISRC（可选）
 
-## 翻译（非歌词源，附注）
+请求头：
 
-翻译走独立管线：DeepSeek（默认）/ ChatGPT / 自定义 OpenAI 兼容 API / Google 免费翻译（设置 → 歌词翻译切换）。缓存按服务维度隔离，切换服务自动重译。
+```http
+Authorization: Bearer <内置 Key>
+Accept: application/json
+```
+
+成功响应的核心字段：
+
+```json
+{
+  "data": {
+    "track": { "title": "...", "artist": "..." },
+    "plainLyrics": "...",
+    "syncedLyrics": [{ "startMs": 1234, "text": "..." }],
+    "translation": "..."
+  },
+  "meta": {
+    "matchLevel": "HIGH_CONFIDENCE",
+    "matchScore": 0.98
+  }
+}
+```
+
+客户端会校验歌词文本、时间戳和匹配元数据；不满足可信度要求的数据不会进入渲染或持久缓存。
+
+## Genius 兜底
+
+```text
+搜索：GET https://api.genius.com/search?q={kw}&access_token={TOKEN}
+歌词：GET https://genius.com/songs/<id>/embed.js
+```
+
+Genius Token 在 `genius.com/api-clients` 创建，并在设置面板中填写。歌词来自 Genius 静态歌词页面；客户端会清理段落标记、解码 embed.js 中的 JSON 字符串，并尝试多个高可信候选。
+
+Genius 请求会区分以下状态：
+
+- 未配置 Token：跳过 Genius 兜底
+- 认证失败/限流/服务端错误：记录为可重试失败，不写 NO_LYRICS 负缓存
+- 当前候选无可用歌词：继续尝试下一个合格候选
+
+## 缓存与竞态保护
+
+- 歌词缓存 key 为 Spotify track ID，模型同时保存完整 Spotify URI 与 Matcher 信息。
+- 客户端启动和切歌时会在歌词页外预取当前歌曲；打开歌词页时优先使用内存缓存，避免再次等待网络。
+- 请求使用 generation + `AbortController` 保护；切歌、关闭页面或新请求开始时，旧请求不能更新当前页面、全局 store 或缓存。
+- `spotify:local:*`、非 track URI 和格式错误 URI 不会访问缓存或远端来源。
+- LYRIVA 无歌词且 Genius 已明确执行并确认没有结果时，才写入 NO_LYRICS 负缓存。
+- 缓存模型会在渲染前进行运行时结构校验。
+
+## 翻译
+
+翻译是独立管线，不属于歌词来源：
+
+- Google 免费翻译
+- DeepSeek
+- ChatGPT
+- 自定义 OpenAI 兼容 API
+
+翻译缓存按 provider/track 维度隔离；切换 provider 或 API Key 会清理正在加载的模型列表并取消旧请求。
+用户提供的 API Key 只会直连对应服务，不经过共享代理；自定义远程端点必须使用 HTTPS（本机回环地址除外）。
+
+语言识别与安全的本地增强会在歌词首帧显示后运行。客户端不再动态执行远程罗马音脚本；优先使用歌词 API 自带的罗马音，仅西里尔文字使用随扩展打包的本地转换器补全。
+
+## 开发命令
+
+```bash
+bun run dev
+bun run build
+bun run test
+bun run lint
+bun run typecheck
+bun run check
+```
+
+构建产物为 `dist/lyrivamusic.js`。运行时仍保留历史 `/SpicyLyrics` 路由和 DOM/CSS namespace，以兼容已安装用户和 Spotify 页面结构。

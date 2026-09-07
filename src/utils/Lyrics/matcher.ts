@@ -1,4 +1,4 @@
-// Lyra Matcher — 高准确率、宁缺毋滥的歌词匹配核心
+// lyrivaMusic Matcher — 高准确率、宁缺毋滥的歌词匹配核心
 //
 // 不可违反原则（见项目需求文档 §24）：
 //   1. TITLE_MATCH ≠ SONG_MATCH
@@ -88,8 +88,14 @@ export type LyricsPayload = {
     StartTime?: number;
     EndTime?: number;
     Translation?: string;
-    Lead?: { Syllables?: Array<{ Text?: string; IsPartOfWord?: boolean; [k: string]: unknown }>; [k: string]: unknown };
-    Background?: Array<{ Syllables?: Array<{ Text?: string; [k: string]: unknown }>; [k: string]: unknown }>;
+    Lead?: {
+      Syllables?: Array<{ Text?: string; IsPartOfWord?: boolean; [k: string]: unknown }>;
+      [k: string]: unknown;
+    };
+    Background?: Array<{
+      Syllables?: Array<{ Text?: string; [k: string]: unknown }>;
+      [k: string]: unknown;
+    }>;
     [k: string]: unknown;
   }>;
   /** Static 的行 */
@@ -177,7 +183,23 @@ const UNKNOWN_ARTIST_SCORE_CAP = 72;
 // 版本识别
 // ============================================================
 const VERSION_TOKEN_MAP: Array<[VersionKind, string[]]> = [
-  ["live", ["live", "live version", "live at", "现场", "演唱会", "音乐节", "歌谣祭", "大祭典", "concert", "festival", "tour", "in concert"]],
+  [
+    "live",
+    [
+      "live",
+      "live version",
+      "live at",
+      "现场",
+      "演唱会",
+      "音乐节",
+      "歌谣祭",
+      "大祭典",
+      "concert",
+      "festival",
+      "tour",
+      "in concert",
+    ],
+  ],
   ["remix", ["remix", "混音"]],
   ["remaster", ["remaster", "remastered", "重制版", "reissue"]],
   ["acoustic", ["acoustic", "unplugged", "钢琴版", "吉他版"]],
@@ -293,7 +315,14 @@ export function splitArtists(raw: string): string[] {
     .replace(/[[(（【][^\]）)】]*[\])）】]/g, " ")
     .replace(/[[(（【\]）)】]/g, " ")
     .replace(ARTIST_SEPARATOR_RE, "|");
-  return [...new Set(stripped.split("|").map((p) => normalizeText(p)).filter(Boolean))];
+  return [
+    ...new Set(
+      stripped
+        .split("|")
+        .map((p) => normalizeText(p))
+        .filter(Boolean)
+    ),
+  ];
 }
 
 function scriptOf(s: string): "latin" | "cjk" | "hangul" | "kana" | "other" {
@@ -357,7 +386,11 @@ export function artistMatch(
   if (bestSimilarity > 0) return { status: "MATCH", similarity: bestSimilarity };
   // 同语系 pair 存在却无一确认相似 → 明确不同。但 "other"（泰/阿等）不在此列：
   // 它们不做 MATCH 判定，也不会因无相似对而误判 MISMATCH。
-  if (anySameScriptPair && !sp.some((a) => scriptOf(a) === "other") && !ca.some((b) => scriptOf(b) === "other")) {
+  if (
+    anySameScriptPair &&
+    !sp.some((a) => scriptOf(a) === "other") &&
+    !ca.some((b) => scriptOf(b) === "other")
+  ) {
     return { status: "MISMATCH", similarity: 0 };
   }
   // 完全跨语系：译名是「一对一」（或整团对整团）的；数量不对称（单人对多人）→ 明确不同
@@ -379,7 +412,10 @@ function versionStatusOf(spotTokens: VersionKind[], candTokens: VersionKind[]): 
 // ============================================================
 // 时长 / ISRC / 专辑
 // ============================================================
-function durationScoreOf(spotMs?: number, candMs?: number): { score: number; gapSec: number | null } {
+function durationScoreOf(
+  spotMs?: number,
+  candMs?: number
+): { score: number; gapSec: number | null } {
   if (!spotMs || spotMs <= 0 || !candMs || candMs <= 0) return { score: 0, gapSec: null };
   const gapSec = Math.abs(spotMs - candMs) / 1000;
   if (gapSec <= 3) return { score: DURATION_LE3, gapSec };
@@ -631,5 +667,5 @@ export function selectBest(pool: MatchResult[]): MatchResult | null {
 }
 
 // ============================================================
-// 结构化调试日志（[Lyra Matcher]）
+// 结构化调试日志（[lyrivaMusic Matcher]）
 // ============================================================

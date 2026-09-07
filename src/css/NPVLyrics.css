@@ -1,5 +1,5 @@
 /*
- * Spicy Lyrics — NPV lyrics card
+ * lyrivaMusic — NPV lyrics card
  * Compact glass card injected into Spotify's right-sidebar Now Playing View.
  * The card body hosts a full #SpicyLyricsPage in CardMode; overrides below
  * compact the page's sizing for the narrow sidebar.
@@ -116,8 +116,7 @@
   display: none;
 }
 
-.Root__right-sidebar:has(#SpicyLyricsNPVCard.Expanded)
-  .main-nowPlayingView-headerContainer {
+.Root__right-sidebar:has(#SpicyLyricsNPVCard.Expanded) .main-nowPlayingView-headerContainer {
   display: none;
 }
 
@@ -136,8 +135,7 @@
    height: 100% on the card resolves against an indefinite height and falls
    back to content size. Force a definite height down the whole ancestor
    chain — including the OverlayScrollbars wrappers — while expanded. */
-.Root__right-sidebar:has(#SpicyLyricsNPVCard.Expanded)
-  .main-nowPlayingView-mainContainer,
+.Root__right-sidebar:has(#SpicyLyricsNPVCard.Expanded) .main-nowPlayingView-mainContainer,
 .Root__right-sidebar:has(#SpicyLyricsNPVCard.Expanded)
   .main-nowPlayingView-mainContainer
   [data-overlayscrollbars-viewport],
@@ -147,12 +145,9 @@
 .Root__right-sidebar:has(#SpicyLyricsNPVCard.Expanded)
   .main-nowPlayingView-mainContainer
   .os-content,
-.Root__right-sidebar:has(#SpicyLyricsNPVCard.Expanded)
-  .main-nowPlayingView-mainWrapper,
-.Root__right-sidebar:has(#SpicyLyricsNPVCard.Expanded)
-  .main-nowPlayingView-panel,
-.Root__right-sidebar:has(#SpicyLyricsNPVCard.Expanded)
-  .main-nowPlayingView-content {
+.Root__right-sidebar:has(#SpicyLyricsNPVCard.Expanded) .main-nowPlayingView-mainWrapper,
+.Root__right-sidebar:has(#SpicyLyricsNPVCard.Expanded) .main-nowPlayingView-panel,
+.Root__right-sidebar:has(#SpicyLyricsNPVCard.Expanded) .main-nowPlayingView-content {
   height: 100%;
   padding-bottom: 0;
 }
@@ -230,9 +225,7 @@
     inset 0 -1px 0 rgba(255, 255, 255, 0.24);
 }
 
-#SpicyLyricsNPVCard.Expanded
-  .CardControls:has(.CardControl:hover)
-  > .CardControl:not(:hover) {
+#SpicyLyricsNPVCard.Expanded .CardControls:has(.CardControl:hover) > .CardControl:not(:hover) {
   opacity: 0.78;
 }
 
@@ -266,10 +259,7 @@
   --default-font-size: clamp(0.5rem, calc(1cqw * 3.8), 1.5rem);
 }
 
-#SpicyLyricsNPVCard.Expanded
-  #SpicyLyricsPage.CardMode
-  .LyricsContainer
-  .LyricsContent {
+#SpicyLyricsNPVCard.Expanded #SpicyLyricsPage.CardMode .LyricsContainer .LyricsContent {
   --DefaultLyricsSize: clamp(2.2rem, calc(1cqw * 7.5), 3.6rem);
 }
 
@@ -320,26 +310,14 @@
 /* Credits & community credits slightly bigger than their normal sizing
    (bases: .Credits 0.47em, .SongInfo 0.35em, .LyricsProvider 0.34em in
    Mixed.css — all !important, so match with higher specificity). */
-#SpicyLyricsNPVCard
-  #SpicyLyricsPage.SpicyRenderer
-  .LyricsContainer
-  .LyricsContent
-  .Credits {
+#SpicyLyricsNPVCard #SpicyLyricsPage.SpicyRenderer .LyricsContainer .LyricsContent .Credits {
   font-size: 0.62em !important;
 }
 
-#SpicyLyricsNPVCard
-  #SpicyLyricsPage.SpicyRenderer
-  .LyricsContainer
-  .LyricsContent
-  .SongInfo {
+#SpicyLyricsNPVCard #SpicyLyricsPage.SpicyRenderer .LyricsContainer .LyricsContent .SongInfo {
   font-size: 0.5em !important;
 }
 
-#SpicyLyricsNPVCard
-  #SpicyLyricsPage.SpicyRenderer
-  .LyricsContainer
-  .LyricsContent
-  .LyricsProvider {
+#SpicyLyricsNPVCard #SpicyLyricsPage.SpicyRenderer .LyricsContainer .LyricsContent .LyricsProvider {
   font-size: 0.45em !important;
 }

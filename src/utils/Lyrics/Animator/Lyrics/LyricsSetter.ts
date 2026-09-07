@@ -8,11 +8,7 @@ type ExtendedLyricsType = LyricsType | "None";
 // Define a type for the word/syllable status
 type ElementStatus = "NotSung" | "Active" | "Sung";
 
-function getElementStatus(
-  currentTime: number,
-  startTime: number,
-  endTime: number
-): ElementStatus {
+function getElementStatus(currentTime: number, startTime: number, endTime: number): ElementStatus {
   if (currentTime < startTime) return "NotSung";
   if (currentTime >= endTime) return "Sung";
   return "Active";

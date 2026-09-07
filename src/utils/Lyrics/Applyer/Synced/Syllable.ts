@@ -1,4 +1,8 @@
-import { $lyricsContainerExists, $minimalLyricsMode, $simpleLyricsMode } from "../../../../utils/stores.ts";
+import {
+  $lyricsContainerExists,
+  $minimalLyricsMode,
+  $simpleLyricsMode,
+} from "../../../../utils/stores.ts";
 import { PageContainer } from "../../../../components/Pages/PageView.ts";
 import { applyStyles, removeAllStyles } from "../../../CSS/Styles.ts";
 import {
@@ -87,11 +91,12 @@ export function ApplySyllableLyrics(data: LyricsData, UseRomanized: boolean = fa
   // 防御：畸形载荷（Content 缺失/非数组）不应白屏——统一按空数组处理
   const content = Array.isArray(data.Content) ? data.Content : [];
 
-  const hasOppositeAligned = content.some(item => item.OppositeAligned === true);
+  const hasOppositeAligned = content.some((item) => item.OppositeAligned === true);
   LyricsContainer.classList.toggle("HasDuetLines", hasOppositeAligned);
-  const hasRtlLines = content.some(line =>
-    (line.Lead?.Syllables ?? []).some(syllable => isRtl(syllable.Text)) ||
-    line.Background?.some(bg => bg.Syllables.some(syllable => isRtl(syllable.Text))) === true
+  const hasRtlLines = content.some(
+    (line) =>
+      (line.Lead?.Syllables ?? []).some((syllable) => isRtl(syllable.Text)) ||
+      line.Background?.some((bg) => bg.Syllables.some((syllable) => isRtl(syllable.Text))) === true
   );
   LyricsContainer.classList.toggle("HasRtlLines", hasRtlLines);
 
@@ -211,15 +216,14 @@ export function ApplySyllableLyrics(data: LyricsData, UseRomanized: boolean = fa
     const lineEndTimeAndNextLineStartTimeDistance =
       nextLineStartTime !== 0 ? nextLineStartTime - leadEnd : 0;
 
-    const lineEndTime =
-      $minimalLyricsMode.get()
-        ? nextLineStartTime === 0
-          ? leadEnd
-          : lineEndTimeAndNextLineStartTimeDistance < getLyricsBetweenShow() &&
-              nextLineStartTime > leadEnd
-            ? nextLineStartTime
-            : leadEnd
-        : leadEnd;
+    const lineEndTime = $minimalLyricsMode.get()
+      ? nextLineStartTime === 0
+        ? leadEnd
+        : lineEndTimeAndNextLineStartTimeDistance < getLyricsBetweenShow() &&
+            nextLineStartTime > leadEnd
+          ? nextLineStartTime
+          : leadEnd
+      : leadEnd;
 
     LyricsObject.Types.Syllable.Lines.push({
       HTMLElement: lineElem,
@@ -259,12 +263,20 @@ export function ApplySyllableLyrics(data: LyricsData, UseRomanized: boolean = fa
         UseRomanized && lead.TransliteratedText !== undefined ? lead.TransliteratedText : lead.Text
       ).split("").length;
 
-      const IfLetterCapable = IsLetterCapable(letterLength, totalDuration) && !isRtl(UseRomanized && lead.TransliteratedText !== undefined ? lead.TransliteratedText : lead.Text);
+      const IfLetterCapable =
+        IsLetterCapable(letterLength, totalDuration) &&
+        !isRtl(
+          UseRomanized && lead.TransliteratedText !== undefined
+            ? lead.TransliteratedText
+            : lead.Text
+        );
 
       if (IfLetterCapable) {
         word = document.createElement("div");
         const letters = (
-          UseRomanized && lead.TransliteratedText !== undefined ? lead.TransliteratedText : lead.Text
+          UseRomanized && lead.TransliteratedText !== undefined
+            ? lead.TransliteratedText
+            : lead.Text
         ).split(""); // Split word into individual letters
 
         Emphasize(letters, word, lead);
@@ -283,7 +295,9 @@ export function ApplySyllableLyrics(data: LyricsData, UseRomanized: boolean = fa
         }
       } else {
         word.textContent =
-          UseRomanized && lead.TransliteratedText !== undefined ? lead.TransliteratedText : lead.Text;
+          UseRomanized && lead.TransliteratedText !== undefined
+            ? lead.TransliteratedText
+            : lead.Text;
 
         if (!$simpleLyricsMode.get()) {
           word.style.setProperty("--gradient-position", `-20%`);
@@ -368,7 +382,11 @@ export function ApplySyllableLyrics(data: LyricsData, UseRomanized: boolean = fa
             UseRomanized && bw.TransliteratedText !== undefined ? bw.TransliteratedText : bw.Text
           ).split("").length;
 
-          const IfLetterCapable = IsLetterCapable(letterLength, totalDuration) && !isRtl(UseRomanized && bw.TransliteratedText !== undefined ? bw.TransliteratedText : bw.Text);
+          const IfLetterCapable =
+            IsLetterCapable(letterLength, totalDuration) &&
+            !isRtl(
+              UseRomanized && bw.TransliteratedText !== undefined ? bw.TransliteratedText : bw.Text
+            );
 
           if (IfLetterCapable) {
             bwE = document.createElement("div");
@@ -447,7 +465,11 @@ export function ApplySyllableLyrics(data: LyricsData, UseRomanized: boolean = fa
         });
       });
     }
-    if (arr[index + 1] && arr[index + 1].Lead && arr[index + 1].Lead.StartTime - leadEnd >= getLyricsBetweenShow()) {
+    if (
+      arr[index + 1] &&
+      arr[index + 1].Lead &&
+      arr[index + 1].Lead.StartTime - leadEnd >= getLyricsBetweenShow()
+    ) {
       const musicalLine = document.createElement("div");
       musicalLine.classList.add("line");
       musicalLine.classList.add("musical-line");
@@ -457,9 +479,7 @@ export function ApplySyllableLyrics(data: LyricsData, UseRomanized: boolean = fa
         HTMLElement: musicalLine,
         StartTime: ConvertTime(leadEnd),
         EndTime: ConvertTime(nextLeadStart),
-        TotalTime:
-          ConvertTime(nextLeadStart) -
-          ConvertTime(leadEnd),
+        TotalTime: ConvertTime(nextLeadStart) - ConvertTime(leadEnd),
         DotLine: true,
       });
 
@@ -482,7 +502,10 @@ export function ApplySyllableLyrics(data: LyricsData, UseRomanized: boolean = fa
       const dotPadding = getInterludeTimePadding() / 3;
       const dot1EndTime = Math.max(gapStartTime, gapStartTime + baseDotTime + dotPadding);
       const dot2EndTime = Math.max(dot1EndTime, gapStartTime + baseDotTime * 2 + dotPadding * 2);
-      const dot3EndTime = Math.max(dot2EndTime, gapStartTime + totalTime + getInterludeTimePadding());
+      const dot3EndTime = Math.max(
+        dot2EndTime,
+        gapStartTime + totalTime + getInterludeTimePadding()
+      );
 
       musicalDots1.classList.add("word");
       musicalDots1.classList.add("dot");

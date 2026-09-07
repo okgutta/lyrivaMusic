@@ -18,12 +18,16 @@ function saveUiStateBlob(obj: Record<string, any>) {
   Spicetify.LocalStorage.set(UI_STATE_KEY, JSON.stringify(obj));
 }
 
-const _uiState: Record<string, any> = migrateKeys(readUiStateBlob(), {
-  "IsNowBarOpen": "isNowBarOpen",
-  "NowBarSide": "nowBarSide",
-  "ForceCompactMode": "forceCompactMode",
-  "previous-version": "previousVersion",
-}, saveUiStateBlob);
+const _uiState: Record<string, any> = migrateKeys(
+  readUiStateBlob(),
+  {
+    IsNowBarOpen: "isNowBarOpen",
+    NowBarSide: "nowBarSide",
+    ForceCompactMode: "forceCompactMode",
+    "previous-version": "previousVersion",
+  },
+  saveUiStateBlob
+);
 
 const persistAtom = makePersistAtom(() => _uiState, saveUiStateBlob);
 

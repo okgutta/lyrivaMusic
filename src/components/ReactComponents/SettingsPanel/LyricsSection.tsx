@@ -57,94 +57,91 @@ export default function LyricsSection({ query, sectionFilter }: Props) {
     <>
       {(r1 || r2 || r3 || r4) && (
         <Section title="歌词模式">
-      {r1 && (
-        <Row label="简洁歌词模式">
-          <Toggle checked={simpleLyricsMode} onChange={(v) => $simpleLyricsMode.set(v)} />
-        </Row>
-      )}
+          {r1 && (
+            <Row label="简洁歌词模式">
+              <Toggle checked={simpleLyricsMode} onChange={(v) => $simpleLyricsMode.set(v)} />
+            </Row>
+          )}
 
-      {r2 && (
-        <Row
-          label="简洁模式：文字动画样式"
-          nested
-          disabled={!simpleLyricsMode}
-          disabledReason="请先启用「简洁歌词模式」再修改此项"
-        >
-          <SegmentedControl
-            value={simpleLyricsModeRenderingType}
-            options={renderingTypeOptions}
-            labels={renderingTypeLabels}
-            onChange={(v) => $simpleLyricsModeRenderingType.set(v)}
-            disabled={!simpleLyricsMode}
-          />
-        </Row>
-      )}
+          {r2 && (
+            <Row
+              label="简洁模式：文字动画样式"
+              nested
+              disabled={!simpleLyricsMode}
+              disabledReason="请先启用「简洁歌词模式」再修改此项"
+            >
+              <SegmentedControl
+                value={simpleLyricsModeRenderingType}
+                options={renderingTypeOptions}
+                labels={renderingTypeLabels}
+                onChange={(v) => $simpleLyricsModeRenderingType.set(v)}
+                disabled={!simpleLyricsMode}
+              />
+            </Row>
+          )}
 
-      {r3 && (
-        <Row label="极简歌词模式">
-          <Toggle checked={minimalLyricsMode} onChange={(v) => $minimalLyricsMode.set(v)} />
-        </Row>
-      )}
+          {r3 && (
+            <Row label="极简歌词模式">
+              <Toggle checked={minimalLyricsMode} onChange={(v) => $minimalLyricsMode.set(v)} />
+            </Row>
+          )}
 
-      {r4 && (
-        <Row label="歌词行悬停背景">
-          <Toggle checked={lineHoverBackground} onChange={(v) => $lineHoverBackground.set(v)} />
-        </Row>
-      )}
+          {r4 && (
+            <Row label="歌词行悬停背景">
+              <Toggle checked={lineHoverBackground} onChange={(v) => $lineHoverBackground.set(v)} />
+            </Row>
+          )}
         </Section>
       )}
 
       {(r5 || r6 || r7 || r8 || r9) && (
         <Section title="正在播放与弹出">
-      {r5 && (
-        <Row label="紧凑模式下锁定媒体框尺寸">
-          <Toggle checked={lockedMediaBox} onChange={(v) => $lockedMediaBox.set(v)} />
-        </Row>
-      )}
+          {r5 && (
+            <Row label="紧凑模式下锁定媒体框尺寸">
+              <Toggle checked={lockedMediaBox} onChange={(v) => $lockedMediaBox.set(v)} />
+            </Row>
+          )}
 
-      {r6 && (
-        <Row label="禁用弹出歌词窗口">
-          <Toggle
-            checked={!popupLyricsAllowed}
-            onChange={(v) => $popupLyricsAllowed.set(!v)}
-          />
-        </Row>
-      )}
+          {r6 && (
+            <Row label="禁用弹出歌词窗口">
+              <Toggle checked={!popupLyricsAllowed} onChange={(v) => $popupLyricsAllowed.set(!v)} />
+            </Row>
+          )}
 
-      {r7 && (
-        <Row
-          label="歌词控制按钮位置"
-          disabled={!isGlobalNav}
-          disabledReason="仅在新版 Spotify 导航布局中可用"
-        >
-          <SegmentedControl
-            value={viewControlsPosition}
-            options={vcPositionOptions}
-            labels={vcPositionLabels}
-            onChange={(v) => $viewControlsPosition.set(v)}
-          />
-        </Row>
-      )}
+          {r7 && (
+            <Row
+              label="歌词控制按钮位置"
+              disabled={!isGlobalNav}
+              disabledReason="仅在新版 Spotify 导航布局中可用"
+            >
+              <SegmentedControl
+                value={viewControlsPosition}
+                options={vcPositionOptions}
+                labels={vcPositionLabels}
+                onChange={(v) => $viewControlsPosition.set(v)}
+              />
+            </Row>
+          )}
 
-      {r8 && (
-        <Row label="禁用正在播放歌词">
-          <Toggle checked={disableNpvLyrics} onChange={(v) => $disableNpvLyrics.set(v)} />
-        </Row>
-      )}
+          {r8 && (
+            <Row label="禁用正在播放歌词">
+              <Toggle checked={disableNpvLyrics} onChange={(v) => $disableNpvLyrics.set(v)} />
+            </Row>
+          )}
 
-      {r9 && (
-        <Row
-          label="无歌词时隐藏正在播放歌词卡片"
-          nested
-          disabled={disableNpvLyrics}
-          disabledReason="正在播放歌词卡片已被禁用"
-        >
-          <Toggle
-            checked={hideNpvLyricsWhenUnavailable}
-            onChange={(v) => $hideNpvLyricsWhenUnavailable.set(v)}
-          />
-        </Row>
-      )}
+          {r9 && (
+            <Row
+              label="无歌词时隐藏正在播放歌词卡片"
+              nested
+              disabled={disableNpvLyrics}
+              disabledReason="正在播放歌词卡片已被禁用"
+            >
+              <Toggle
+                checked={hideNpvLyricsWhenUnavailable}
+                onChange={(v) => $hideNpvLyricsWhenUnavailable.set(v)}
+              />
+            </Row>
+          )}
         </Section>
       )}
     </>

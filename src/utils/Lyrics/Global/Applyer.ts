@@ -148,6 +148,10 @@ export default async function ApplyLyrics(
   }
 
   const lyrics = descriptor as LyricsData;
+  const currentUri = SpotifyPlayer.GetUri();
+  if (lyrics?.uri && currentUri && lyrics.uri !== currentUri) {
+    return;
+  }
 
   const romanize = isRomanized;
 

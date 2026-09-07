@@ -22,10 +22,15 @@ import {
   $translationTargetLang,
 } from "../../stores.ts";
 import { SpotifyPlayer } from "../../../components/Global/SpotifyPlayer.ts";
+import Global from "../../../components/Global/Global.ts";
 import ApplyLyrics from "../Global/Applyer.ts";
 import fetchLyrics from "../fetchLyrics.ts";
 import { getCacheSnapshot, getCachedFromSnapshot, setCachedTranslations } from "./cache.ts";
-import { translateLines, hasTranslationProviderConfig, type TranslateMetrics } from "./providers.ts";
+import {
+  translateLines,
+  hasTranslationProviderConfig,
+  type TranslateMetrics,
+} from "./providers.ts";
 import { getTrackCache, setTrackCache, fingerprintSource } from "./trackCache.ts";
 import { isSameLanguage } from "./detect.ts";
 
@@ -263,7 +268,8 @@ async function run(uri: string, model: Model): Promise<void> {
       } else {
         translateMetrics = result.metrics;
       }
-      const cacheEntries: Array<{ sourceLine: string; targetLang: string; translated: string }> = [];
+      const cacheEntries: Array<{ sourceLine: string; targetLang: string; translated: string }> =
+        [];
       result.lines.forEach((translated, i) => {
         const { entry, localIdx } = items[i];
         if (translated && translated !== entry.text) {
@@ -397,6 +403,10 @@ async function run(uri: string, model: Model): Promise<void> {
 /** ApplyLyrics 渲染完成后调用（Global/Applyer.ts 钩子） */
 export function afterLyricsApply(uri: string, model: Model): void {
   if (!uri || !model?.Type) return;
+  // Fresh lyrics render before franc analysis on purpose. Wait for the
+  // lyrics:analyzed event so same-language detection remains correct without
+  // putting language analysis back on the first-paint critical path.
+  if (!model.Language && !model.LanguageISO2 && model._spicyLyricsProcessed !== true) return;
   // 不完整翻译后的自我重渲染：消费抑制标记，避免死循环（下次 apply 会正常重试）
   if (suppressApplyUri === uri) {
     suppressApplyUri = null;
@@ -420,6 +430,10 @@ export function afterLyricsApply(uri: string, model: Model): void {
   }
   void run(uri, model);
 }
+
+Global.Event.listen("lyrics:analyzed", ({ uri, lyrics }: { uri: string; lyrics: Model }) =>
+  afterLyricsApply(uri, lyrics)
+);
 
 /** 缓存查看器编辑后：清空已应用状态，重新从缓存挂载当前歌曲译文（命中曲目缓存，即时生效） */
 export function refreshCurrentTranslation(): void {

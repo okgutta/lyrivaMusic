@@ -1,4 +1,4 @@
-# Spicy Lyrics - Security Policy
+# lyrivaMusic - Security Policy
 
 ## Reporting a Vulnerability
 

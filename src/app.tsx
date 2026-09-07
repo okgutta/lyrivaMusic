@@ -95,7 +95,7 @@ async function main() {
   const skeletonStyle = document.createElement("style");
   skeletonStyle.innerHTML = `
         /* This style is here to prevent the @keyframes removal in the CSS. I still don't know why that's happening. */
-        /* This is a part of Spicy Lyrics */
+        /* This is a part of lyrivaMusic */
         @keyframes skeleton {
             to {
                 background-position-x: 0;
@@ -264,7 +264,7 @@ async function main() {
       {
         Registered: false,
         Button: new SpotifyPlayer.Playbar.Button(
-          "Lyra",
+          "lyrivaMusic",
           Icons.LyricsPage,
           (self) => {
             if (!self.active) {
@@ -744,6 +744,16 @@ async function main() {
     }
     Global.Event.listen("playback:songchange", onSongChange);
 
+    // Warm the lyrics cache even when the lyrics page has not been opened yet.
+    // fetchLyrics is UI-independent, so opening the page later can render from
+    // memory instead of waiting for the first LYRIVA round trip.
+    const initialLyricsUri = SpotifyPlayer.GetUri();
+    if (initialLyricsUri) {
+      void fetchLyrics(initialLyricsUri)
+        .then(ApplyLyrics)
+        .catch((error) => playbackLogger.error("Failed to prefetch initial lyrics", error));
+    }
+
     const _initStaticBgMode = $staticBackgroundMode.get();
     if (
       _initStaticBgMode !== "off" &&
@@ -828,7 +838,7 @@ async function main() {
     }
 
     if (button) {
-      button.Button.tippy.setContent("Lyra");
+      button.Button.tippy.setContent("lyrivaMusic");
     }
 
     {
@@ -887,7 +897,7 @@ async function main() {
               }
             );
           } catch (err) {
-            console.error("Spicy Lyrics: couldn't listen for volume changes", err);
+            console.error("lyrivaMusic: couldn't listen for volume changes", err);
           }
         }
       );
@@ -933,7 +943,9 @@ async function main() {
                   refetchAttempts.set(refetchUri, attempts + 1);
                   void fetchLyrics(refetchUri)
                     .then(ApplyLyrics)
-                    .catch((error) => playbackLogger.error("Failed to refetch stale lyrics", error));
+                    .catch((error) =>
+                      playbackLogger.error("Failed to refetch stale lyrics", error)
+                    );
                 } else {
                   playbackLogger.warn("Giving up on repeatedly stale lyrics", refetchUri);
                 }
@@ -1041,7 +1053,7 @@ async function main() {
   });
 
   new Spicetify.Menu.Item(
-    "Lyra 设置",
+    "lyrivaMusic 设置",
     false,
     () => {
       openSettingsPanel();

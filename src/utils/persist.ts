@@ -39,9 +39,7 @@ export function makePersistAtom(
   saveBlob: (obj: Record<string, any>) => void
 ) {
   return function persistAtom<V>(key: string, defaultValue: V) {
-    const store = atom<V>(
-      getBlob()[key] !== undefined ? getBlob()[key] : defaultValue
-    );
+    const store = atom<V>(getBlob()[key] !== undefined ? getBlob()[key] : defaultValue);
     store.listen((v) => {
       const blob = getBlob();
       blob[key] = v;

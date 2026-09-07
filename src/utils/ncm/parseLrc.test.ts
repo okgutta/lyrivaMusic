@@ -16,7 +16,11 @@ function check(name: string, cond: boolean, detail?: unknown): void {
 // ── parseLrc：基础时间戳 ────────────────────────────────────────────────────
 {
   const rows = parseLrc("[00:10.00]hello");
-  check("单时间戳解析", rows.length === 1 && rows[0].t === 10_000 && rows[0].text === "hello", rows);
+  check(
+    "单时间戳解析",
+    rows.length === 1 && rows[0].t === 10_000 && rows[0].text === "hello",
+    rows
+  );
 }
 
 {
@@ -42,13 +46,21 @@ function check(name: string, cond: boolean, detail?: unknown): void {
 // ── parseLrc：JSON 行（网易云逐字格式） ─────────────────────────────────────
 {
   const rows = parseLrc('{"t":1500,"c":[{"tx":"你"},{"tx":"好"}]}');
-  check("JSON 行 c 数组拼接", rows.length === 1 && rows[0].t === 1500 && rows[0].text === "你好", rows);
+  check(
+    "JSON 行 c 数组拼接",
+    rows.length === 1 && rows[0].t === 1500 && rows[0].text === "你好",
+    rows
+  );
 }
 
 {
   // c 为字符串的变体（修复过的分支）
   const rows = parseLrc('{"t":2500,"c":"plain"}');
-  check("JSON 行 c 字符串", rows.length === 1 && rows[0].t === 2500 && rows[0].text === "plain", rows);
+  check(
+    "JSON 行 c 字符串",
+    rows.length === 1 && rows[0].t === 2500 && rows[0].text === "plain",
+    rows
+  );
 }
 
 // ── parseLrc：排序与容错 ────────────────────────────────────────────────────

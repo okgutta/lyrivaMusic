@@ -10,7 +10,7 @@ import Logger from "../Logger.ts";
 // Gap scale factors relative to 1cqw (containerWidth / 100).
 // Gap is baked into each wrapper's padding-bottom so items can have
 // different trailing gaps without any virtualizer-level workaround.
-const GAP_NORMAL = 1;      // 1cqw — line↔line and bg-line↔next-line
+const GAP_NORMAL = 1; // 1cqw — line↔line and bg-line↔next-line
 const GAP_LINE_TO_BG = 0.2; // 0.2cqw — line↔bg-line (bg sits closer to its parent)
 
 const ESTIMATE: Record<string, number> = {
@@ -133,8 +133,7 @@ class LyricsVirtualizer {
       // a 0 estimate for an Active dotline lets every following item render at
       // a wrong start position until the ResizeObserver catches up.
       h = el.classList.contains("Active") ? ESTIMATE.default : ESTIMATE["musical-line"];
-    }
-    else if (el.classList.contains("bg-line")) h = ESTIMATE["bg-line"];
+    } else if (el.classList.contains("bg-line")) h = ESTIMATE["bg-line"];
     else h = ESTIMATE.default;
     return h + this._itemGap(index);
   };
@@ -302,11 +301,7 @@ class LyricsVirtualizer {
     }, 200);
   };
 
-  init(
-    scrollEl: HTMLElement,
-    virtualContainer: HTMLElement,
-    lineElements: HTMLElement[]
-  ): void {
+  init(scrollEl: HTMLElement, virtualContainer: HTMLElement, lineElements: HTMLElement[]): void {
     virtualizerLogger.info("Initializing lyrics virtualizer", {
       lineCount: lineElements.length,
       scrollClientHeight: scrollEl.clientHeight,
@@ -316,8 +311,14 @@ class LyricsVirtualizer {
     this._onNewElementMounted = moduleOnNewElementMounted; // destroy 清空后恢复
     this._maid = new Maid();
     this._maid.Give((): void => {
-      if (this._scrollEndTimer !== null) { clearTimeout(this._scrollEndTimer); this._scrollEndTimer = null; }
-      if (this._resizeRAF !== null) { cancelAnimationFrame(this._resizeRAF); this._resizeRAF = null; }
+      if (this._scrollEndTimer !== null) {
+        clearTimeout(this._scrollEndTimer);
+        this._scrollEndTimer = null;
+      }
+      if (this._resizeRAF !== null) {
+        cancelAnimationFrame(this._resizeRAF);
+        this._resizeRAF = null;
+      }
     });
     this._allElements = lineElements;
     this._wrappers = Array.from({ length: lineElements.length }, () => null);
@@ -329,63 +330,67 @@ class LyricsVirtualizer {
     this._containerHeight = scrollEl.clientHeight;
     virtualizerLogger.debug("Initial container width resolved", containerWidth);
 
-    this._resizeObserver = this._maid!.Give(new ResizeObserver((entries) => {
-      const v = this._virtualizer;
-      if (!v) return;
-      // When minimized the scroll element collapses to 0×0 and every wrapper fires
-      // with 0 offsetHeight; caching those zeros corrupts the cache so on restore all
-      // items land at start=0. Only write measurements when the container is rendered.
-      if (this._scrollEl && this._scrollEl.clientWidth === 0) {
-        virtualizerLogger.debug("Skipping resize measure: container width is zero");
-        return;
-      }
-      let changed = false;
-      for (const entry of entries) {
-        const el = entry.target as HTMLElement;
-        if (!el.isConnected) continue;
-        if (el.getAttribute("data-index") === null) continue;
-        v.measureElement(el);
-        changed = true;
-      }
-      if (changed && this._resizeRAF === null) {
-        this._resizeRAF = requestAnimationFrame(() => {
-          this._resizeRAF = null;
-          if (this._virtualizer === v) {
-            virtualizerLogger.debug("ResizeObserver scheduled virtualizer update");
-            v._willUpdate();
-          }
-        });
-      }
-    }));
-
-    this._classObserver = this._maid!.Give(new MutationObserver((mutations) => {
-      const v = this._virtualizer;
-      if (!v) return;
-      let changed = false;
-      for (const mutation of mutations) {
-        const el = mutation.target as HTMLElement;
-        const index = this._allElements.indexOf(el);
-        if (index === -1) continue;
-        const wrapper = this._wrappers[index];
-        if (!wrapper?.isConnected) continue;
-        const gap = this._itemGap(index);
-        const prev = parseFloat(wrapper.style.paddingBottom) || 0;
-        if (Math.abs(gap - prev) >= 0.5) {
-          wrapper.style.paddingBottom = `${gap}px`;
-          v.measureElement(wrapper);
+    this._resizeObserver = this._maid!.Give(
+      new ResizeObserver((entries) => {
+        const v = this._virtualizer;
+        if (!v) return;
+        // When minimized the scroll element collapses to 0×0 and every wrapper fires
+        // with 0 offsetHeight; caching those zeros corrupts the cache so on restore all
+        // items land at start=0. Only write measurements when the container is rendered.
+        if (this._scrollEl && this._scrollEl.clientWidth === 0) {
+          virtualizerLogger.debug("Skipping resize measure: container width is zero");
+          return;
+        }
+        let changed = false;
+        for (const entry of entries) {
+          const el = entry.target as HTMLElement;
+          if (!el.isConnected) continue;
+          if (el.getAttribute("data-index") === null) continue;
+          v.measureElement(el);
           changed = true;
         }
-      }
-      if (changed && this._resizeRAF === null) {
-        this._resizeRAF = requestAnimationFrame(() => {
-          this._resizeRAF = null;
-          if (this._virtualizer === v) {
-            virtualizerLogger.debug("Class mutation scheduled virtualizer update");
-            v._willUpdate();
+        if (changed && this._resizeRAF === null) {
+          this._resizeRAF = requestAnimationFrame(() => {
+            this._resizeRAF = null;
+            if (this._virtualizer === v) {
+              virtualizerLogger.debug("ResizeObserver scheduled virtualizer update");
+              v._willUpdate();
+            }
+          });
+        }
+      })
+    );
+
+    this._classObserver = this._maid!.Give(
+      new MutationObserver((mutations) => {
+        const v = this._virtualizer;
+        if (!v) return;
+        let changed = false;
+        for (const mutation of mutations) {
+          const el = mutation.target as HTMLElement;
+          const index = this._allElements.indexOf(el);
+          if (index === -1) continue;
+          const wrapper = this._wrappers[index];
+          if (!wrapper?.isConnected) continue;
+          const gap = this._itemGap(index);
+          const prev = parseFloat(wrapper.style.paddingBottom) || 0;
+          if (Math.abs(gap - prev) >= 0.5) {
+            wrapper.style.paddingBottom = `${gap}px`;
+            v.measureElement(wrapper);
+            changed = true;
           }
-        });
-      }
-    }));
+        }
+        if (changed && this._resizeRAF === null) {
+          this._resizeRAF = requestAnimationFrame(() => {
+            this._resizeRAF = null;
+            if (this._virtualizer === v) {
+              virtualizerLogger.debug("Class mutation scheduled virtualizer update");
+              v._willUpdate();
+            }
+          });
+        }
+      })
+    );
     // Single subtree observer on the virtual container rather than one per element:
     // only mounted elements live there, so it scopes to where gap updates matter.
     this._classObserver.observe(virtualContainer, {
@@ -429,7 +434,7 @@ class LyricsVirtualizer {
         // re-mount so the first paint isn't blank when opening the page.
         this._syncScrollRect();
         this._onVirtualizerChange(v);
-      })
+      });
     });
 
     scrollEl.addEventListener("scrollend", this._onScrollEnd, { passive: true });
@@ -450,53 +455,55 @@ class LyricsVirtualizer {
     this._spacer = spacer;
     this._maid!.Give(() => spacer.parentElement?.removeChild(spacer));
 
-    this._widthObserver = this._maid!.Give(new ResizeObserver(() => {
-      const v = this._virtualizer;
-      const el = this._scrollEl;
-      if (!v || !el) return;
-      const newWidth = el.clientWidth;
-      
-      if (newWidth === 0) {
-        virtualizerLogger.debug("Ignoring width change to 0 (likely minimized)");
-        return;
-      }
-      if (this._spacer) this._spacer.style.height = `${el.clientHeight / 2}px`;
-      if (Math.abs(newWidth - this._containerWidth) < 1) {
-        // Width unchanged, but a height-only resize (vertical-only window resize,
-        // PIP) still changes the visible window. The early return would otherwise
-        // swallow it until the watchdog catches up; respond immediately here.
-        if (Math.abs(el.clientHeight - this._containerHeight) >= 1) {
-          virtualizerLogger.debug("Container height changed (width stable)", {
-            previous: this._containerHeight,
-            next: el.clientHeight,
-          });
-          this._containerHeight = el.clientHeight;
-          v._willUpdate();
-        }
-        return;
-      }
-      
-      virtualizerLogger.info("Container width changed", {
-        previous: this._containerWidth,
-        next: newWidth,
-      });
-      this._containerWidth = newWidth;
-      this._containerHeight = el.clientHeight;
+    this._widthObserver = this._maid!.Give(
+      new ResizeObserver(() => {
+        const v = this._virtualizer;
+        const el = this._scrollEl;
+        if (!v || !el) return;
+        const newWidth = el.clientWidth;
 
-      // Clear any existing timer
-      if (this._resizeDebounceTimer !== null) {
-        clearTimeout(this._resizeDebounceTimer);
-      }
-    
-      // Wait 150ms after the user STOPS resizing before measuring.
-      // This lets sluggish devices finish their DOM reflow before TanStack measures.
-      this._resizeDebounceTimer = setTimeout(() => {
-        this._resizeDebounceTimer = null;
-        virtualizerLogger.debug("Applying debounced resize remeasure");
-        this._remeasureVisible();
-        v._willUpdate();
-      }, 150);
-    }));
+        if (newWidth === 0) {
+          virtualizerLogger.debug("Ignoring width change to 0 (likely minimized)");
+          return;
+        }
+        if (this._spacer) this._spacer.style.height = `${el.clientHeight / 2}px`;
+        if (Math.abs(newWidth - this._containerWidth) < 1) {
+          // Width unchanged, but a height-only resize (vertical-only window resize,
+          // PIP) still changes the visible window. The early return would otherwise
+          // swallow it until the watchdog catches up; respond immediately here.
+          if (Math.abs(el.clientHeight - this._containerHeight) >= 1) {
+            virtualizerLogger.debug("Container height changed (width stable)", {
+              previous: this._containerHeight,
+              next: el.clientHeight,
+            });
+            this._containerHeight = el.clientHeight;
+            v._willUpdate();
+          }
+          return;
+        }
+
+        virtualizerLogger.info("Container width changed", {
+          previous: this._containerWidth,
+          next: newWidth,
+        });
+        this._containerWidth = newWidth;
+        this._containerHeight = el.clientHeight;
+
+        // Clear any existing timer
+        if (this._resizeDebounceTimer !== null) {
+          clearTimeout(this._resizeDebounceTimer);
+        }
+
+        // Wait 150ms after the user STOPS resizing before measuring.
+        // This lets sluggish devices finish their DOM reflow before TanStack measures.
+        this._resizeDebounceTimer = setTimeout(() => {
+          this._resizeDebounceTimer = null;
+          virtualizerLogger.debug("Applying debounced resize remeasure");
+          this._remeasureVisible();
+          v._willUpdate();
+        }, 150);
+      })
+    );
     this._widthObserver.observe(scrollEl);
 
     // Watchdog catching drift within ~250ms when an observer notification above is
@@ -762,10 +769,7 @@ class LyricsVirtualizer {
     // If something else moved the scroll between our last set and this retry
     // (user scroll, another scrollTo call, etc), abandon the retry chain so we
     // don't fight whoever took over.
-    if (
-      expectedScrollTop !== null &&
-      Math.abs(scrollEl.scrollTop - expectedScrollTop) > 2
-    ) {
+    if (expectedScrollTop !== null && Math.abs(scrollEl.scrollTop - expectedScrollTop) > 2) {
       virtualizerLogger.debug("Aborting scrollToIndex retry: external scroll detected", {
         expectedScrollTop,
         actualScrollTop: scrollEl.scrollTop,
@@ -898,9 +902,7 @@ class LyricsVirtualizer {
           return;
         }
 
-        const fresh = v.measurementsCache[index] as
-          | { start: number; size: number }
-          | undefined;
+        const fresh = v.measurementsCache[index] as { start: number; size: number } | undefined;
         // Did the cache move item N's position/size since we read it? Newly-mounted
         // items above N can shift its `start` even if N itself wasn't measured.
         const drift = fresh

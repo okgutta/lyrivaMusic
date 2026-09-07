@@ -27,7 +27,6 @@ export default function ExperimentsSection({ query, sectionFilter }: Props) {
 
   return (
     <Section title="实验功能">
-
       {EXPERIMENTS.map((exp) => (
         <ExperimentRow key={exp.id} experiment={exp} />
       ))}

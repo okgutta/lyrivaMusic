@@ -205,6 +205,7 @@ export function NavigationRow({
         role="button"
         tabIndex={disabled ? -1 : 0}
         aria-labelledby={labelId}
+        aria-disabled={disabled || undefined}
         onClick={disabled ? undefined : onClick}
         onKeyDown={(e) => {
           if (disabled) return;
@@ -391,11 +392,7 @@ export function SearchBar({ value, onChange }: { value: string; onChange: (v: st
         aria-label="搜索设置"
       />
       {value && (
-        <button
-          className="sl-sp-search-clear"
-          onClick={() => onChange("")}
-          aria-label="清除搜索"
-        >
+        <button className="sl-sp-search-clear" onClick={() => onChange("")} aria-label="清除搜索">
           <svg
             width="10"
             height="10"

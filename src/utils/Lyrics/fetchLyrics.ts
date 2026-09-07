@@ -17,6 +17,7 @@ import {
 } from "./matcher.ts";
 import { tryLyrivaLyrics } from "./lyriva.ts";
 import { geniusProvider } from "./providers/genius.ts";
+import Global from "../../components/Global/Global.ts";
 
 const lyricsLogger = new Logger("Lyrics Pipeline");
 const lyricsCacheLogger = new Logger("Lyrics Cache");
@@ -33,6 +34,14 @@ type InflightFetch = {
 };
 const inflightFetches = new Map<string, InflightFetch>();
 
+function isTrackUri(uri: string): boolean {
+  return /^spotify:track:[^:]+$/.test(uri) || uri.startsWith("spotify:local:");
+}
+
+function isActiveRequest(gen: number, uri: string, signal?: AbortSignal): boolean {
+  return !signal?.aborted && !isStale(gen) && SpotifyPlayer.GetUri() === uri;
+}
+
 /** 持久缓存条目结构（model + 匹配信息 + 负缓存标记；负缓存条目 matchInfo 可不完整） */
 export type LyricsCacheEntry = {
   model?: LyricsPayload;
@@ -42,10 +51,10 @@ export type LyricsCacheEntry = {
 };
 
 // 缓存 Key 至少考虑 track identity + title/artist（见 matchInfo 校验）。
-// g1 → g2：版本号 + 缓存名一起改，彻底失效旧结构（旧错误匹配 / 旧 NO_LYRICS 字符串）不再被读取。
+// g2 → g3：失效因顶层 meta 解包错误而误写的 NO_LYRICS 负缓存。
 export const LyricsStore = GetExpireStore<LyricsCacheEntry>(
-  "SpicyLyrics_LyricsStore_g2",
-  2,
+  "SpicyLyrics_LyricsStore_g3",
+  3,
   { Unit: "Days", Duration: 3 },
   isDev as true
 );
@@ -145,7 +154,9 @@ function setRomanizationClass(hasTransliterations: boolean | undefined): void {
  * loader, publish the type, reveal the containers and view controls, and clear the
  * fetching flag. Used by every successful return path.
  */
-function presentLyrics(lyricsData: LyricsPayload): void {
+function presentLyrics(lyricsData: LyricsPayload, uri: string, gen?: number): void {
+  if (gen !== undefined && !isActiveRequest(gen, uri)) return;
+  if (SpotifyPlayer.GetUri() !== uri) return;
   setRomanizationClass(lyricsData?.HasTransliterations);
   HideLoaderContainer();
   $currentLyricsType.set(lyricsData.Type);
@@ -155,10 +166,94 @@ function presentLyrics(lyricsData: LyricsPayload): void {
   $currentlyFetching.set(false);
 }
 
+const finalizedModels = new WeakSet<object>();
+const backgroundFinalizations = new Map<string, Promise<void>>();
+
+async function finalizeLyricsInBackground(
+  model: LyricsPayload,
+  trackId: string,
+  uri: string,
+  gen: number,
+  signal: AbortSignal
+): Promise<void> {
+  // Wait until the freshly mounted lyrics have had a chance to paint. Language
+  // detection can be CPU-heavy, but it must never delay the first visible frame.
+  await new Promise<void>((resolve) => {
+    if (typeof requestAnimationFrame === "function" && !document.hidden) {
+      requestAnimationFrame(() => setTimeout(resolve, 0));
+    } else {
+      setTimeout(resolve, 0);
+    }
+  });
+  if (!isActiveRequest(gen, uri, signal)) return;
+
+  let appliedRomanization = false;
+  try {
+    appliedRomanization = await ProcessLyrics(model);
+    model._spicyLyricsProcessed = true;
+    finalizedModels.add(model);
+  } catch (error) {
+    // 罗马音是可选增强：CDN/词典失败不能影响已经显示的原始歌词。
+    lyricsLogger.warn("歌词后台增强失败", error);
+    return;
+  }
+
+  if (!isActiveRequest(gen, uri, signal)) return;
+  $currentLyricsData.set(JSON.stringify(model));
+  setRomanizationClass(model.HasTransliterations);
+  Global.Event.evoke("lyrics:analyzed", { uri, lyrics: model });
+  if (appliedRomanization) {
+    Global.Event.evoke("lyrics:enriched", { uri, lyrics: model });
+  }
+
+  if (LyricsStore) {
+    try {
+      const storeEntry: LyricsCacheEntry = {
+        model,
+        uri,
+        matchInfo: model.matchInfo as LyricsCacheEntry["matchInfo"],
+      };
+      await LyricsStore.SetItem(trackId, storeEntry);
+    } catch (error) {
+      lyricsCacheLogger.error("Error saving lyrics to cache", error);
+    }
+  }
+}
+
+function scheduleLyricsFinalization(
+  model: LyricsPayload,
+  trackId: string,
+  uri: string,
+  gen: number,
+  signal: AbortSignal
+): void {
+  if (finalizedModels.has(model) || model._spicyLyricsProcessed === true) return;
+  const key = `${gen}:${uri}`;
+  if (backgroundFinalizations.has(key)) return;
+  const task = finalizeLyricsInBackground(model, trackId, uri, gen, signal).finally(() => {
+    if (backgroundFinalizations.get(key) === task) backgroundFinalizations.delete(key);
+  });
+  backgroundFinalizations.set(key, task);
+}
+
 /**
  * 对外入口：in-flight 去重 + generation 递增 + abort 上一首在途请求。
  */
+export function cancelLyricsFetch(): void {
+  lyricsGeneration++;
+  currentFetchAbort?.abort();
+  currentFetchAbort = null;
+  for (const entry of inflightFetches.values()) entry.controller.abort();
+  inflightFetches.clear();
+  if ($currentlyFetching.get()) $currentlyFetching.set(false);
+  HideLoaderContainer();
+}
+
 export default async function fetchLyrics(uri: string): Promise<[object | string, number] | null> {
+  if (!isTrackUri(uri)) {
+    lyricsLogger.debug("Ignoring malformed track URI", uri);
+    return null;
+  }
   const existing = inflightFetches.get(uri);
   if (existing && existing.generation === lyricsGeneration && !existing.controller.signal.aborted) {
     lyricsLogger.debug("In-flight hit, reusing request", uri);
@@ -214,7 +309,6 @@ async function fetchLyricsInner(
   lyricsLogger.debug("Fetch requested", uri);
   const LyricsContent =
     PageContainer?.querySelector(".LyricsContainer .LyricsContent") ?? undefined;
-  if (!LyricsContent) return null;
   if (LyricsContent?.classList.contains("offline")) {
     LyricsContent.classList.remove("offline");
   }
@@ -239,11 +333,19 @@ async function fetchLyricsInner(
     return ["unknown-track", 400];
   }
 
-  const trackId = uri.split(":")[2];
+  // Local files have no stable provider identity and must not touch caches or
+  // remote sources.
+  if (uri.startsWith("spotify:local:")) {
+    $currentlyFetching.set(false);
+    HideLoaderContainer();
+    return ["local-track", 400];
+  }
+
+  const trackId = uri.slice("spotify:track:".length);
   const target = buildTarget(uri);
   // 切歌瞬间 uri 已不是当前歌曲：丢弃本次请求（generation 机制会接管）
-  if (!target) {
-    $currentlyFetching.set(false);
+  if (!target || !trackId || !isActiveRequest(gen, uri, signal)) {
+    if (!isStale(gen)) $currentlyFetching.set(false);
     return null;
   }
 
@@ -268,21 +370,14 @@ async function fetchLyricsInner(
           verifyMatchInfo(parsed?.matchInfo, target) &&
           isValidLyricsModel(parsed)
         ) {
-          presentLyrics(parsed);
+          presentLyrics(parsed, uri, gen);
+          scheduleLyricsFinalization(parsed, trackId, uri, gen, signal);
           return [parsed, 200];
         }
       }
     } catch (error) {
       lyricsCacheLogger.error("Error parsing saved lyrics data", error);
-      $currentlyFetching.set(false);
-      HideLoaderContainer();
     }
-  }
-
-  // Local files have no real track id → cannot be looked up or fetched.
-  if (uri.startsWith("spotify:local:")) {
-    $currentlyFetching.set(false);
-    return ["local-track", 400];
   }
 
   // ===== 持久缓存（LyricsStore）：命中且身份一致才采用 =====
@@ -314,7 +409,8 @@ async function fetchLyricsInner(
               $currentLyricsData.set("");
             } else {
               $currentLyricsData.set(JSON.stringify(model));
-              presentLyrics(model);
+              presentLyrics(model, uri, gen);
+              scheduleLyricsFinalization(model, trackId, uri, gen, signal);
               return [{ ...model, fromCache: true }, 200];
             }
           }
@@ -338,19 +434,25 @@ async function fetchLyricsInner(
   ShowLoaderContainer();
 
   // ===== 主源：LYRIVA API（完全替换内置多源搜索 → Matcher → 取词链） =====
+  const requestStartedAt = performance.now();
   const result = await tryLyrivaLyrics(target, signal);
+  lyricsLogger.debug("LYRIVA request completed", {
+    durationMs: Math.round(performance.now() - requestStartedAt),
+    kind: result.kind,
+    uri,
+  });
   if (isStale(gen)) {
     return null;
   }
 
   // ===== 兜底：Genius 静态词（LYRIVA 未命中时才走；命中则跳过） =====
-  let fallback: { model: LyricsPayload; matchInfo: MatchInfo } | null = null;
+  let fallback: GeniusFallbackResult | null = null;
   if (result.kind !== "ok") {
     fallback = await tryGeniusFallback(target, signal);
     if (isStale(gen)) {
       return null;
     }
-    if (fallback) {
+    if (fallback.kind === "hit") {
       lyricsLogger.info(
         "🎯",
         `Genius 兜底命中: ${fallback.matchInfo.candidateTitle} — ${fallback.matchInfo.candidateArtists.join(", ")} (${fallback.matchInfo.level})`
@@ -358,26 +460,18 @@ async function fetchLyricsInner(
     }
   }
 
-  if (result.kind === "ok" || fallback) {
-    const model = result.kind === "ok" ? result.model : fallback!.model;
-    await ProcessLyrics(model);
-    if (isStale(gen)) return null;
+  const fallbackHit = fallback?.kind === "hit" ? fallback : null;
+  if (result.kind === "ok" || fallbackHit) {
+    const model = result.kind === "ok" ? result.model : fallbackHit!.model;
     $currentLyricsData.set(JSON.stringify(model));
-    if (LyricsStore) {
-      try {
-        const storeEntry: LyricsCacheEntry = { model, uri, matchInfo: model.matchInfo as LyricsCacheEntry["matchInfo"] };
-        await LyricsStore.SetItem(trackId, storeEntry);
-      } catch (error) {
-        lyricsCacheLogger.error("Error saving lyrics to cache", error);
-      }
-    }
-    if (isStale(gen)) return null;
-    presentLyrics(model);
+    if (!isActiveRequest(gen, uri, signal)) return null;
+    presentLyrics(model, uri, gen);
+    scheduleLyricsFinalization(model, trackId, uri, gen, signal);
     return [{ ...model, fromCache: false }, 200];
   }
 
   // ===== 权威无歌词 → NO_LYRICS 负缓存（身份限定，防旧错误负缓存误伤） =====
-  if (result.kind === "not-found") {
+  if (result.kind === "not-found" && fallback?.kind === "miss") {
     if (LyricsStore) {
       try {
         const notFoundEntry = {
@@ -404,8 +498,10 @@ async function fetchLyricsInner(
   // Genius 兜底也未命中才会走到这里。
   if (result.kind === "skipped") {
     lyricsLogger.warn("LYRIVA 内置 API Key 为空，自动歌词获取跳过");
-  } else {
+  } else if (result.kind === "unavailable") {
     lyricsLogger.warn(`LYRIVA 不可用：${result.reason}`);
+  } else {
+    lyricsLogger.warn("歌词来源均未返回可用歌词");
   }
   HideLoaderContainer();
   $currentlyFetching.set(false);
@@ -417,44 +513,62 @@ async function fetchLyricsInner(
  * 只采信 Matcher 判定 HIGH/GOOD 且未被拒的候选——错词比没词更糟。
  * 未配置 Token 时 geniusProvider.search 直接返回空，等价于无兜底。
  */
+type GeniusFallbackResult =
+  | { kind: "hit"; model: LyricsPayload; matchInfo: MatchInfo }
+  | { kind: "miss" }
+  | { kind: "unavailable" };
+
 async function tryGeniusFallback(
   target: TargetTrack,
   signal?: AbortSignal
-): Promise<{ model: LyricsPayload; matchInfo: MatchInfo } | null> {
+): Promise<GeniusFallbackResult> {
   let cands: Candidate[] = [];
   try {
     cands = await geniusProvider.search(target, signal);
   } catch (err) {
     if (signal?.aborted) throw err;
     lyricsCacheLogger.debug("Genius 兜底搜索失败", err);
-    return null;
+    return { kind: "unavailable" };
   }
-  if (isStale(lyricsGeneration)) return null;
-  if (!cands.length) return null;
+  if (signal?.aborted) return { kind: "unavailable" };
+  if (!cands.length) return { kind: "miss" };
 
   const ranked = cands
     .map((cand) => ({ cand, match: matchCandidate(target, cand) }))
     .sort((a, b) => rankMatch(b.match) - rankMatch(a.match));
-  const best = ranked[0];
-  if (best.match.rejected || (best.match.level !== "HIGH" && best.match.level !== "GOOD")) {
-    return null;
-  }
 
-  const model = await geniusProvider.fetchLyrics(best.cand, signal);
-  if (isStale(lyricsGeneration)) return null;
-  if (!model) return null;
-  const matchInfo: MatchInfo = {
-    level: best.match.level,
-    confidence: best.match.confidence,
-    targetTitle: target.title,
-    targetArtists: target.artists,
-    candidateTitle: best.cand.title,
-    candidateArtists: best.cand.artists,
-    source: "genius",
-    savedAt: Date.now(),
-  };
-  model.matchInfo = matchInfo;
-  return { model, matchInfo };
+  for (const candidate of ranked) {
+    if (
+      candidate.match.rejected ||
+      (candidate.match.level !== "HIGH" && candidate.match.level !== "GOOD")
+    ) {
+      continue;
+    }
+    let model: LyricsPayload | null;
+    try {
+      model = await geniusProvider.fetchLyrics(candidate.cand, signal);
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      lyricsCacheLogger.debug("Genius 兜底候选抓取失败", error);
+      continue;
+    }
+    if (signal?.aborted) return { kind: "unavailable" };
+    if (!model) continue;
+    const matchInfo: MatchInfo = {
+      level: candidate.match.level,
+      confidence: candidate.match.confidence,
+      targetTitle: target.title,
+      targetArtists: target.artists,
+      candidateTitle: candidate.cand.title,
+      candidateArtists: candidate.cand.artists,
+      source: "genius",
+      savedAt: Date.now(),
+    };
+    model.uri = target.uri;
+    model.matchInfo = matchInfo;
+    return { kind: "hit", model, matchInfo };
+  }
+  return { kind: "miss" };
 }
 
 let ContainerShowLoaderTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -468,7 +582,7 @@ function ShowLoaderContainer(): void {
     ContainerShowLoaderTimeout = setTimeout(() => {
       ContainerShowLoaderTimeout = null;
       loaderContainer.classList.add("active");
-    }, 2000);
+    }, 200);
   }
 }
 

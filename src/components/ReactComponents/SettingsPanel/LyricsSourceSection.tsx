@@ -16,7 +16,11 @@ export default function LyricsSourceSection({ query, sectionFilter, onOpenDetail
 
   if (sectionFilter !== "All" && sectionFilter !== SECTION_NAME) return null;
 
-  const rToken = matches(query, "Genius API Token", "Genius 歌词源的 Access Token，配置后 LYRIVA 未命中时自动兜底");
+  const rToken = matches(
+    query,
+    "Genius API Token",
+    "Genius 歌词源的 Access Token，配置后 LYRIVA 未命中时自动兜底"
+  );
 
   if (!rToken) return null;
 

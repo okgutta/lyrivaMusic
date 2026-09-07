@@ -29,12 +29,14 @@ export function MountScrollSimplebar() {
 
   ScrollSimplebar = new SimpleBar(LyricsContainer, { autoHide: false });
 
-  PageContainer
-    .querySelector<HTMLElement>(ElementEventQuery)
-    ?.addEventListener("mouseenter", LyricsPageMouseEnter);
-  PageContainer
-    .querySelector<HTMLElement>(ElementEventQuery)
-    ?.addEventListener("mouseleave", LyricsPageMouseLeave);
+  PageContainer.querySelector<HTMLElement>(ElementEventQuery)?.addEventListener(
+    "mouseenter",
+    LyricsPageMouseEnter
+  );
+  PageContainer.querySelector<HTMLElement>(ElementEventQuery)?.addEventListener(
+    "mouseleave",
+    LyricsPageMouseLeave
+  );
 }
 
 export function ClearScrollSimplebar() {
@@ -42,12 +44,14 @@ export function ClearScrollSimplebar() {
   ScrollSimplebar = null;
   SetIsMouseInLyricsPage(false);
   if (PageContainer) {
-    PageContainer
-      .querySelector<HTMLElement>(ElementEventQuery)
-      ?.removeEventListener("mouseenter", LyricsPageMouseEnter);
-    PageContainer
-      .querySelector<HTMLElement>(ElementEventQuery)
-      ?.removeEventListener("mouseleave", LyricsPageMouseLeave);
+    PageContainer.querySelector<HTMLElement>(ElementEventQuery)?.removeEventListener(
+      "mouseenter",
+      LyricsPageMouseEnter
+    );
+    PageContainer.querySelector<HTMLElement>(ElementEventQuery)?.removeEventListener(
+      "mouseleave",
+      LyricsPageMouseLeave
+    );
   }
 }
 

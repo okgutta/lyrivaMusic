@@ -1,5 +1,5 @@
 // Provider 界面：Provider 只负责「搜索 → 返回候选」与「按候选取词」，
-// 绝不自行决定「这就是目标歌曲」——匹配交给统一的 Lyra Matcher。
+// 绝不自行决定「这就是目标歌曲」——匹配交给统一的 lyrivaMusic Matcher。
 // 日志一律通过传入的 LyraLogger（一次请求一个 requestId）；不自行 console。
 import type { Candidate, LyricsPayload, LyricSource, TargetTrack } from "../matcher.ts";
 import type { LyraLogger } from "../../LyraLogger.ts";
@@ -9,7 +9,11 @@ export interface LyricProvider {
   /** 搜索：把目标曲目的元数据归一化后，返回原始候选列表（不含匹配结果） */
   search(target: TargetTrack, signal?: AbortSignal, log?: LyraLogger): Promise<Candidate[]>;
   /** 按候选取词：返回歌词模型；无可用词/词太少返回 null */
-  fetchLyrics(cand: Candidate, signal?: AbortSignal, log?: LyraLogger): Promise<LyricsPayload | null>;
+  fetchLyrics(
+    cand: Candidate,
+    signal?: AbortSignal,
+    log?: LyraLogger
+  ): Promise<LyricsPayload | null>;
 }
 
 /** 取歌词行数（Line 看 Content，Static 看 Lines） */

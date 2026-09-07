@@ -1,4 +1,4 @@
-/* ── Settings Panel — Lyra Console（Modern Dark 玻璃） ────────────────
+/* ── Settings Panel — lyrivaMusic Console（Modern Dark 玻璃） ────────────────
    设计语言：电影感暗色 + 分层玻璃 + 靛紫点缀（灵感检索：Music Streaming
    产品模式 → Dark OLED + Glassmorphism + Modern Dark Cinema）。
    - 面板接管弹窗玻璃底（隐藏弹窗头，侧栏通铺到边缘），不再是
@@ -32,7 +32,7 @@ sl-generic-modal.SpicyLyricsModal .sl-modal-overlay .slmodal-settingsPanel > div
   container: slsettings / inline-size;
 }
 
-/* 弹窗头（"Lyra 设置" + 关闭）由面板根上的 hidden-modal-header-style 隐藏，
+/* 弹窗头（"lyrivaMusic 设置" + 关闭）由面板根上的 hidden-modal-header-style 隐藏，
    关闭入口整合进面板内容区右上角。standalone 详情页（外部直开）不带该类，
    仍走弹窗头。 */
 sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .sl-modal-main-section {
@@ -52,7 +52,10 @@ sl-generic-modal.SpicyLyricsModal
   border-radius: var(--radius-lg);
 }
 
-sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .sl-modal-main-section main.sl-modal-content {
+sl-generic-modal.SpicyLyricsModal
+  .slmodal-settingsPanel
+  .sl-modal-main-section
+  main.sl-modal-content {
   overflow: hidden;
   flex: 1;
   min-height: 0;
@@ -94,11 +97,7 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
   position: absolute;
   inset: 0 0 auto 0;
   height: 240px;
-  background: radial-gradient(
-    560px 220px at 62% 0%,
-    rgba(110, 99, 240, 0.16),
-    transparent 72%
-  );
+  background: radial-gradient(560px 220px at 62% 0%, rgba(110, 99, 240, 0.16), transparent 72%);
   pointer-events: none;
   z-index: -1;
 }
@@ -194,7 +193,9 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
     flex-shrink: 0;
     color: inherit;
     opacity: 0.8;
-    transition: color 0.18s var(--slsp-ease-out), opacity 0.18s var(--slsp-ease-out);
+    transition:
+      color 0.18s var(--slsp-ease-out),
+      opacity 0.18s var(--slsp-ease-out);
   }
 
   span {
@@ -643,7 +644,9 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
     background: rgba(255, 255, 255, 0.16);
     box-shadow: inset 0 0 0 1px var(--slsp-hairline);
     border-radius: 13px;
-    transition: background 0.18s ease, box-shadow 0.18s ease;
+    transition:
+      background 0.18s ease,
+      box-shadow 0.18s ease;
     position: relative;
 
     &::after {
@@ -773,7 +776,9 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
 
   svg {
     flex-shrink: 0;
-    transition: color 0.15s ease, transform 0.15s var(--slsp-ease-out);
+    transition:
+      color 0.15s ease,
+      transform 0.15s var(--slsp-ease-out);
   }
 }
 
@@ -821,7 +826,9 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
   outline: none;
   width: 100%;
   min-width: 180px;
-  transition: box-shadow 0.15s var(--slsp-ease-out), background 0.15s ease;
+  transition:
+    box-shadow 0.15s var(--slsp-ease-out),
+    background 0.15s ease;
 
   &::placeholder {
     color: var(--color-text-tertiary);

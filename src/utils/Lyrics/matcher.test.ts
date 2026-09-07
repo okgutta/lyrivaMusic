@@ -1,4 +1,4 @@
-// Lyra Matcher 单元测试（纯逻辑，无 Spicetify 依赖，Node 直接跑）
+// lyrivaMusic Matcher 单元测试（纯逻辑，无 Spicetify 依赖，Node 直接跑）
 //   node src/utils/Lyrics/matcher.test.ts
 import {
   matchCandidate,
@@ -24,7 +24,13 @@ function check(name: string, cond: boolean, detail?: unknown): void {
 }
 
 // 构造目标曲目
-function T(title: string, artist: string | string[], durationMs?: number, album?: string, isrc?: string): TargetTrack {
+function T(
+  title: string,
+  artist: string | string[],
+  durationMs?: number,
+  album?: string,
+  isrc?: string
+): TargetTrack {
   return {
     uri: "spotify:track:test",
     title,
@@ -36,7 +42,13 @@ function T(title: string, artist: string | string[], durationMs?: number, album?
 }
 
 // 构造候选
-function C(title: string, artist: string | string[], durationMs?: number, album?: string, isrc?: string): Candidate {
+function C(
+  title: string,
+  artist: string | string[],
+  durationMs?: number,
+  album?: string,
+  isrc?: string
+): Candidate {
   return {
     source: "qq",
     id: "x",
@@ -71,7 +83,14 @@ function isRejected(r: MatchResult): boolean {
 
 // 案例 2：Weiland - Runaway vs 黄明昊/朱正廷/Ghost/... - Run Away (国语)
 {
-  const r = m(T("Runaway", "Weiland", 190000), C("Run Away (国语)", "黄明昊（Justin）;朱正廷;Ghost（王琳凯）;毕雯珺;Jeffrey董又霖;董岩磊", 183000));
+  const r = m(
+    T("Runaway", "Weiland", 190000),
+    C(
+      "Run Away (国语)",
+      "黄明昊（Justin）;朱正廷;Ghost（王琳凯）;毕雯珺;Jeffrey董又霖;董岩磊",
+      183000
+    )
+  );
   check("案例2 Runaway 群组 → REJECT", isRejected(r), r);
   check("案例2 rejectReason=ARTIST_MISMATCH", r.rejectReason === "ARTIST_MISMATCH", r.rejectReason);
   check("案例2 artistStatus=MISMATCH", r.artistStatus === "MISMATCH");
@@ -80,7 +99,10 @@ function isRejected(r: MatchResult): boolean {
 
 // 案例 3：Jonah Paz - Kissing You vs NCT WISH - Kissing You (2024MBC歌谣大祭典现场)
 {
-  const r = m(T("Kissing You", "Jonah Paz", 210000), C("Kissing You (2024MBC歌谣大祭典现场)", "NCT WISH", 240000));
+  const r = m(
+    T("Kissing You", "Jonah Paz", 210000),
+    C("Kissing You (2024MBC歌谣大祭典现场)", "NCT WISH", 240000)
+  );
   check("案例3 Kissing You 现场版 → REJECT", isRejected(r), r);
   check("案例3 rejectReason=ARTIST_MISMATCH", r.rejectReason === "ARTIST_MISMATCH", r.rejectReason);
   check("案例3 artistStatus=MISMATCH", r.artistStatus === "MISMATCH");
@@ -123,7 +145,9 @@ function isRejected(r: MatchResult): boolean {
 {
   const wrong1 = m(T("Autopilot", "Blession"), C("Autopilot", "Other Artist A"));
   const wrong2 = m(T("Autopilot", "Blession"), C("Autopilot", "Other Artist B"));
-  const allRejected = [wrong1, wrong2].every((r) => isRejected(r) && r.rejectReason === "ARTIST_MISMATCH");
+  const allRejected = [wrong1, wrong2].every(
+    (r) => isRejected(r) && r.rejectReason === "ARTIST_MISMATCH"
+  );
   check("案例8 仅错误艺人候选 → 全部 REJECT", allRejected);
   check("案例8 selectBest → null（NO_MATCH）", selectBest([wrong1, wrong2]) === null);
 }
@@ -173,9 +197,15 @@ function isRejected(r: MatchResult): boolean {
 // ISRC 强匹配 / 强负向
 // ============================================================
 {
-  const matchIsrc = m(T("Song A", "Artist A", 200000, undefined, "USRC17607839"), C("Song A", "Artist A", 200000, undefined, "USRC17607839"));
+  const matchIsrc = m(
+    T("Song A", "Artist A", 200000, undefined, "USRC17607839"),
+    C("Song A", "Artist A", 200000, undefined, "USRC17607839")
+  );
   check("ISRC 一致 → isrcScore>0", matchIsrc.isrcScore > 0, matchIsrc.isrcScore);
-  const diffIsrc = m(T("Song A", "Artist A", 200000, undefined, "USRC17607839"), C("Song A", "Artist A", 200000, undefined, "GBBKS1000001"));
+  const diffIsrc = m(
+    T("Song A", "Artist A", 200000, undefined, "USRC17607839"),
+    C("Song A", "Artist A", 200000, undefined, "GBBKS1000001")
+  );
   check("ISRC 不同 → isrcScore<0", diffIsrc.isrcScore < 0, diffIsrc.isrcScore);
 }
 
@@ -186,11 +216,29 @@ function isRejected(r: MatchResult): boolean {
   check("艺人 MAPTCH 相同", artistMatch(["Weiland"], ["Weiland"]).status === "MATCH");
   check("艺人 MISMATCH 不同", artistMatch(["Weiland"], ["Taylor Swift"]).status === "MISMATCH");
   check("艺人 UNKNOWN 缺艺人", artistMatch(["Weiland"], []).status === "UNKNOWN");
-  check("艺人 MISMATCH 群组（Weiland vs 黄明昊等）", artistMatch(["Weiland"], splitArtists("黄明昊（Justin）;朱正廷;Ghost（王琳凯）;毕雯珺;Jeffrey董又霖;董岩磊")).status === "MISMATCH");
-  check("艺人 简繁 同一（陈奕迅 vs 陳奕迅）", artistMatch(["陈奕迅"], ["陳奕迅"]).status === "MATCH");
-  check("艺人 中文不同（蔡依林 vs 周杰伦）", artistMatch(["周杰伦"], ["蔡依林"]).status === "MISMATCH");
-  check("艺人 跨语系译名 1v1 → UNKNOWN", artistMatch(["周杰伦"], ["Jay Chou"]).status === "UNKNOWN");
-  check("艺人 feat 允许（Artist A vs Artist A feat B）", artistMatch(["Artist A"], splitArtists("Artist A feat. Artist B")).status === "MATCH");
+  check(
+    "艺人 MISMATCH 群组（Weiland vs 黄明昊等）",
+    artistMatch(
+      ["Weiland"],
+      splitArtists("黄明昊（Justin）;朱正廷;Ghost（王琳凯）;毕雯珺;Jeffrey董又霖;董岩磊")
+    ).status === "MISMATCH"
+  );
+  check(
+    "艺人 简繁 同一（陈奕迅 vs 陳奕迅）",
+    artistMatch(["陈奕迅"], ["陳奕迅"]).status === "MATCH"
+  );
+  check(
+    "艺人 中文不同（蔡依林 vs 周杰伦）",
+    artistMatch(["周杰伦"], ["蔡依林"]).status === "MISMATCH"
+  );
+  check(
+    "艺人 跨语系译名 1v1 → UNKNOWN",
+    artistMatch(["周杰伦"], ["Jay Chou"]).status === "UNKNOWN"
+  );
+  check(
+    "艺人 feat 允许（Artist A vs Artist A feat B）",
+    artistMatch(["Artist A"], splitArtists("Artist A feat. Artist B")).status === "MATCH"
+  );
 }
 
 // ============================================================
@@ -212,7 +260,11 @@ function isRejected(r: MatchResult): boolean {
   const correct = m(T("Autopilot", "Blession", 210000), C("Autopilot", "Blession", 210000));
   const best = selectBest([wrongArtist, correct]);
   check("混合池 selectBest 返回正确候选", best !== null && best.artistStatus === "MATCH", best);
-  check("混合池 不会选到错误艺人候选", best !== null && best.candidate.artists[0] === "blession", best);
+  check(
+    "混合池 不会选到错误艺人候选",
+    best !== null && best.candidate.artists[0] === "blession",
+    best
+  );
 }
 
 // ============================================================
@@ -228,7 +280,7 @@ function isRejected(r: MatchResult): boolean {
   check("NO_MATCH 保证：全错误艺人候选 → 全 rejected", allRejected);
   check("NO_MATCH 保证：selectBest → null（一定 NO_MATCH）", selectBest(pool) === null);
 }
-console.log(`\n[Lyra Matcher] ${passed} passed, ${failures} failed`);
+console.log(`\n[lyrivaMusic Matcher] ${passed} passed, ${failures} failed`);
 if (failures > 0) {
   (globalThis as any).process?.exit?.(1);
 }

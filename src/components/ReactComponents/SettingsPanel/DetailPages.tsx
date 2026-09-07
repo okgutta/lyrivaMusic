@@ -16,10 +16,19 @@ import {
   $translationTargetLang,
 } from "../../../utils/stores.ts";
 import { fetchModelsForProvider } from "../../../utils/Lyrics/Translate/providers.ts";
+import { normalizeApiBaseUrl } from "../../../utils/Lyrics/Translate/url.ts";
 import { Row, Select, Section, Input } from "./components.tsx";
 
 /** 二级页外壳：返回按钮 + 内容滚动 */
-function DetailShell({ title, onBack, children }: { title: string; onBack: () => void; children: React.ReactNode }) {
+function DetailShell({
+  title,
+  onBack,
+  children,
+}: {
+  title: string;
+  onBack: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <div className="sl-sp-detail">
       <div className="sl-sp-detail-header">
@@ -196,17 +205,8 @@ export function DetailDeepSeekKey({ onBack }: { onBack: () => void }) {
   return (
     <DetailShell title="DeepSeek API Key" onBack={onBack}>
       <Section>
-        <Row
-          label="API Key"
-          description="在 platform.deepseek.com 创建 API Key"
-          stacked
-        >
-          <Input
-            type="password"
-            value={draft}
-            placeholder="sk-..."
-            onChange={setDraft}
-          />
+        <Row label="API Key" description="在 platform.deepseek.com 创建 API Key" stacked>
+          <Input type="password" value={draft} placeholder="sk-..." onChange={setDraft} />
         </Row>
       </Section>
       <Section>
@@ -263,23 +263,31 @@ export function DetailTranslationModel({ onBack }: { onBack: () => void }) {
       : provider === "openai"
         ? Boolean(openaiApiKey.trim())
         : Boolean(customApiBaseUrl.trim() && customApiKey.trim() && customApiModel.trim());
-  const providerLabel = provider === "deepseek" ? "DeepSeek" : provider === "openai" ? "ChatGPT" : "自定义 API";
+  const providerLabel =
+    provider === "deepseek" ? "DeepSeek" : provider === "openai" ? "ChatGPT" : "自定义 API";
 
   // deepseek/openai：填好 Key 后自动拉取可用模型列表（防抖 600ms）；custom 为自由输入
   useEffect(() => {
     if (isCustom) return;
     const key = (provider === "deepseek" ? deepSeekApiKey : openaiApiKey).trim();
-    if (!key) return;
+    if (!key) {
+      $deepSeekModels.set([]);
+      $deepSeekModelsError.set(null);
+      $deepSeekModelsLoading.set(false);
+      return;
+    }
     let cancelled = false;
+    $deepSeekModels.set([]);
+    const controller = new AbortController();
     const timer = setTimeout(() => {
       $deepSeekModelsLoading.set(true);
       $deepSeekModelsError.set(null);
-      fetchModelsForProvider(key)
+      fetchModelsForProvider(key, controller.signal)
         .then((ids: string[]) => {
-          if (!cancelled && ids.length) $deepSeekModels.set(ids);
+          if (!cancelled) $deepSeekModels.set(ids);
         })
         .catch((err: unknown) => {
-          if (!cancelled) {
+          if (!cancelled && !controller.signal.aborted) {
             $deepSeekModelsError.set(err instanceof Error ? err.message : String(err));
           }
         })
@@ -289,7 +297,9 @@ export function DetailTranslationModel({ onBack }: { onBack: () => void }) {
     }, 600);
     return () => {
       cancelled = true;
+      controller.abort();
       clearTimeout(timer);
+      $deepSeekModelsLoading.set(false);
     };
   }, [provider, deepSeekApiKey, openaiApiKey, refreshTick, isCustom]);
 
@@ -328,7 +338,11 @@ export function DetailTranslationModel({ onBack }: { onBack: () => void }) {
           stacked
         >
           {isCustom ? (
-            <Input value={currentModel} placeholder="模型名称" onChange={(v) => $customApiModel.set(v)} />
+            <Input
+              value={currentModel}
+              placeholder="模型名称"
+              onChange={(v) => $customApiModel.set(v)}
+            />
           ) : (
             <div className="sl-sp-inline-controls">
               <Select
@@ -360,17 +374,8 @@ export function DetailOpenAIConfig({ onBack }: { onBack: () => void }) {
   return (
     <DetailShell title="ChatGPT API Key" onBack={onBack}>
       <Section>
-        <Row
-          label="API Key"
-          description="在 platform.openai.com/api-keys 创建 API Key"
-          stacked
-        >
-          <Input
-            type="password"
-            value={draft}
-            placeholder="sk-..."
-            onChange={setDraft}
-          />
+        <Row label="API Key" description="在 platform.openai.com/api-keys 创建 API Key" stacked>
+          <Input type="password" value={draft} placeholder="sk-..." onChange={setDraft} />
         </Row>
       </Section>
       <Section>
@@ -417,20 +422,15 @@ export function DetailCustomConfig({ onBack }: { onBack: () => void }) {
   return (
     <DetailShell title="自定义 API" onBack={onBack}>
       <Section>
-        <Row label="API 地址" description="OpenAI 兼容端点的 Base URL（含 /v1）" stacked>
-          <Input
-            value={draftUrl}
-            placeholder="https://api.example.com/v1"
-            onChange={setDraftUrl}
-          />
+        <Row
+          label="API 地址"
+          description="OpenAI 兼容端点的 Base URL（含 /v1）；远程地址必须使用 HTTPS"
+          stacked
+        >
+          <Input value={draftUrl} placeholder="https://api.example.com/v1" onChange={setDraftUrl} />
         </Row>
         <Row label="API Key" stacked>
-          <Input
-            type="password"
-            value={draftKey}
-            placeholder="API Key"
-            onChange={setDraftKey}
-          />
+          <Input type="password" value={draftKey} placeholder="API Key" onChange={setDraftKey} />
         </Row>
         <Row label="模型" description="该服务支持的模型名称" stacked>
           <Input value={draftModel} placeholder="模型名称" onChange={setDraftModel} />
@@ -444,7 +444,13 @@ export function DetailCustomConfig({ onBack }: { onBack: () => void }) {
               className="sl-sp-btn sl-sp-btn--primary"
               disabled={!draftUrl.trim() || !draftKey.trim() || !draftModel.trim()}
               onClick={() => {
-                $customApiBaseUrl.set(draftUrl.trim().replace(/\/+$/, ""));
+                const normalizedUrl = normalizeApiBaseUrl(draftUrl);
+                if (!normalizedUrl) {
+                  notify("API 地址必须使用 HTTPS（仅 localhost 可使用 HTTP）");
+                  return;
+                }
+                $customApiBaseUrl.set(normalizedUrl);
+                setDraftUrl(normalizedUrl);
                 $customApiKey.set(draftKey.trim());
                 $customApiModel.set(draftModel.trim());
                 notify("已保存自定义 API 配置");
@@ -474,4 +480,3 @@ export function DetailCustomConfig({ onBack }: { onBack: () => void }) {
     </DetailShell>
   );
 }
-

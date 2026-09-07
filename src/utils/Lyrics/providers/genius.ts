@@ -1,5 +1,5 @@
 // Genius Provider（需要用户自行提供 Access Token）
-// Provider 只负责「搜索 → 返回候选」与「按候选取词」；匹配交给统一 Lyra Matcher。
+// Provider 只负责「搜索 → 返回候选」与「按候选取词」；匹配交给统一 lyrivaMusic Matcher。
 //
 // 两条通道都带 Access-Control-Allow-Origin: *，客户端直连 fetch 即可读：
 //   搜索: https://api.genius.com/search?q=...&access_token=TOKEN
@@ -30,7 +30,7 @@ type GeniusSongResult = {
 
 /** 直连 fetch（超时 + 外部 signal 合并，任一触发即中止） */
 async function geniusFetch(url: string, timeoutMs: number, signal?: AbortSignal): Promise<string> {
-  if (signal?.aborted) throw new Error("aborted");
+  if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   const onAbort = () => ctrl.abort();
@@ -107,25 +107,24 @@ async function searchGeniusProvider(
     }
     return out;
   } catch (err) {
+    if (signal?.aborted) throw err;
     log?.debug(`[genius] 搜索失败: ${String(err)}`);
-    return [];
+    throw err;
   }
 }
 
-/** JS 字符串转义逐段还原（\n \" \\ \uXXXX 等） */
-function unescapeJsString(s: string): string {
-  return s.replace(/\\(?:n|r|t|.|u[0-9a-fA-F]{4})/g, (esc) => {
+/** JS 字符串转义逐段还原（\\n \\" \\\\ \\uXXXX 等） */
+export function unescapeJsString(s: string): string {
+  return s.replace(/\\\\u([0-9a-fA-F]{4})|\\\\(?:n|r|t|\\\\|')|\\\\./g, (esc, unicode) => {
+    if (unicode) return String.fromCharCode(parseInt(unicode, 16));
     switch (esc) {
-      case "\\n":
+      case "\\\\n":
         return "\n";
-      case "\\r":
+      case "\\\\r":
         return "\r";
-      case "\\t":
+      case "\\\\t":
         return "\t";
       default:
-        if (/^\\u[0-9a-fA-F]{4}$/.test(esc)) {
-          return String.fromCharCode(parseInt(esc.slice(2), 16));
-        }
         return esc.slice(1);
     }
   });
@@ -193,6 +192,7 @@ async function fetchGeniusProvider(
     if (!lines) return null;
     return { Type: "Static", Lines: lines.map((Text) => ({ Text })), source: "genius" };
   } catch (err) {
+    if (signal?.aborted) throw err;
     log?.debug(`[genius] embed.js 抓取失败: ${String(err)}`);
     return null;
   }

@@ -21,8 +21,9 @@ import { refreshCurrentTranslation } from "./index.ts";
 // ─── 小工具 ──────────────────────────────────────────────────────────────────
 
 function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c
+  return value.replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c
   );
 }
 
@@ -465,17 +466,24 @@ function createCacheViewerUI(): HTMLElement {
             : cachedTracks
                 .sort((a, b) => b.timestamp - a.timestamp)
                 .map((track, index) => {
-                  const displayTitle = track.trackName || `Track ID: ${getTrackIdFromUri(track.trackUri)}`;
+                  const displayTitle =
+                    track.trackName || `Track ID: ${getTrackIdFromUri(track.trackUri)}`;
                   const providerBadge = providerLabel(track.api, track.metrics?.model);
                   const metricsPills: string[] = [];
                   if (track.metrics?.durationMs) {
-                    metricsPills.push(`<span class="slt-metric-pill" title="翻译耗时">⏱ ${formatDurationMs(track.metrics.durationMs)}</span>`);
+                    metricsPills.push(
+                      `<span class="slt-metric-pill" title="翻译耗时">⏱ ${formatDurationMs(track.metrics.durationMs)}</span>`
+                    );
                   }
                   if (track.metrics?.totalTokens) {
-                    metricsPills.push(`<span class="slt-metric-pill" title="总 token（输入 + 输出）">⌁ ${formatTokenCount(track.metrics.totalTokens)}</span>`);
+                    metricsPills.push(
+                      `<span class="slt-metric-pill" title="总 token（输入 + 输出）">⌁ ${formatTokenCount(track.metrics.totalTokens)}</span>`
+                    );
                   }
                   if (track.metrics?.apiCalls && track.metrics.apiCalls > 1) {
-                    metricsPills.push(`<span class="slt-metric-pill" title="API 调用次数">↻ ${track.metrics.apiCalls}</span>`);
+                    metricsPills.push(
+                      `<span class="slt-metric-pill" title="API 调用次数">↻ ${track.metrics.apiCalls}</span>`
+                    );
                   }
                   return `
                     <div class="slt-cache-item" data-uri="${escapeHtml(track.trackUri)}" data-lang="${escapeHtml(track.targetLang)}">
@@ -563,7 +571,8 @@ function createCacheViewerUI(): HTMLElement {
       refreshStats();
       const list = container.querySelector("#slt-cache-list");
       if (list && list.querySelectorAll(".slt-cache-item").length === 0) {
-        list.innerHTML = '<div class="slt-empty-cache">还没有翻译缓存 —— 播放并翻译过的歌曲会出现在这里</div>';
+        list.innerHTML =
+          '<div class="slt-empty-cache">还没有翻译缓存 —— 播放并翻译过的歌曲会出现在这里</div>';
         container.querySelector(".slt-cache-actions")?.remove();
       }
     });
@@ -575,7 +584,9 @@ function createCacheViewerUI(): HTMLElement {
     clearAllTrackCache();
     refreshStats();
     const list = container.querySelector("#slt-cache-list");
-    if (list) list.innerHTML = '<div class="slt-empty-cache">还没有翻译缓存 —— 播放并翻译过的歌曲会出现在这里</div>';
+    if (list)
+      list.innerHTML =
+        '<div class="slt-empty-cache">还没有翻译缓存 —— 播放并翻译过的歌曲会出现在这里</div>';
     container.querySelector(".slt-cache-actions")?.remove();
     try {
       Spicetify.showNotification("已清空全部翻译缓存");
@@ -687,7 +698,7 @@ function openCachedLyricsViewer(trackUri: string, targetLang: string): void {
       }
     });
     lines.push("-".repeat(40));
-    lines.push("Exported from Spicy Lyrics");
+    lines.push("Exported from lyrivaMusic");
     const text = lines.join("\n");
     try {
       await navigator.clipboard.writeText(text);
@@ -770,7 +781,9 @@ function openCachedLyricsViewer(trackUri: string, targetLang: string): void {
     saveBtn.disabled = true;
     saveBtn.textContent = "已保存!";
     saveBtn.classList.add("slt-copied");
-    content.querySelectorAll(".slt-line-dirty").forEach((el) => el.classList.remove("slt-line-dirty"));
+    content
+      .querySelectorAll(".slt-line-dirty")
+      .forEach((el) => el.classList.remove("slt-line-dirty"));
     setTimeout(() => {
       saveBtn.textContent = "保存修改";
       saveBtn.classList.remove("slt-copied");

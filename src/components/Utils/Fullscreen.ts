@@ -239,9 +239,7 @@ function Open(skipDocumentFullscreen: boolean = false, moveElement: boolean = tr
       nowBarToggle.destroy();
     }
 
-    const NowBarToggle = SpicyPage.querySelector<HTMLElement>(
-      ".ViewControls #NowBarToggle"
-    );
+    const NowBarToggle = SpicyPage.querySelector<HTMLElement>(".ViewControls #NowBarToggle");
     if (NowBarToggle) {
       NowBarToggle.remove();
     }
@@ -267,9 +265,7 @@ function Open(skipDocumentFullscreen: boolean = false, moveElement: boolean = tr
     ResetLastLine();
 
     // Setup media box interactions
-    const MediaBox = SpicyPage.querySelector<HTMLElement>(
-      ".ContentBox .NowBar .Header .MediaBox"
-    );
+    const MediaBox = SpicyPage.querySelector<HTMLElement>(".ContentBox .NowBar .Header .MediaBox");
     const MediaImageContainer = SpicyPage.querySelector<HTMLElement>(
       ".ContentBox .NowBar .Header .MediaBox .MediaImageContainer"
     );
@@ -318,12 +314,8 @@ function Open(skipDocumentFullscreen: boolean = false, moveElement: boolean = tr
 
     const NoLyrics = $currentLyricsData.get().includes("NO_LYRICS");
     if (NoLyrics && !IsCompactMode()) {
-      SpicyPage
-        ?.querySelector(".ContentBox .LyricsContainer")
-        ?.classList.add("Hidden");
-      SpicyPage
-        ?.querySelector<HTMLElement>(".ContentBox")
-        ?.classList.add("LyricsHidden");
+      SpicyPage?.querySelector(".ContentBox .LyricsContainer")?.classList.add("Hidden");
+      SpicyPage?.querySelector<HTMLElement>(".ContentBox")?.classList.add("LyricsHidden");
     }
   }, 75);
 
@@ -350,7 +342,6 @@ async function Close(isPip: boolean = false) {
   }
 
   if (SpicyPage) {
-
     if (isPip) {
       SpicyPage.classList.remove("Fullscreen");
 
@@ -375,7 +366,7 @@ async function Close(isPip: boolean = false) {
       document.body.style.pointerEvents = "none";
 
       try {
-        await new Promise(r => setTimeout(r, 650));
+        await new Promise((r) => setTimeout(r, 650));
 
         TransferElement(SpicyPage, GetPageRoot() as HTMLElement);
         SpicyPage.classList.remove("Fullscreen");
@@ -386,17 +377,13 @@ async function Close(isPip: boolean = false) {
           setTimeout(() => PageView.AppendViewControls(true), 50);
         };
         //setTimeout(() => {
-          handleFullscreenExit()
+        handleFullscreenExit();
         //}, !wasCinemaMode ? 70 : 0);
 
         const NoLyrics = $currentLyricsData.get().includes("NO_LYRICS");
         if (NoLyrics) {
-          SpicyPage
-            ?.querySelector(".ContentBox .LyricsContainer")
-            ?.classList.remove("Hidden");
-          SpicyPage
-            ?.querySelector<HTMLElement>(".ContentBox")
-            ?.classList.remove("LyricsHidden");
+          SpicyPage?.querySelector(".ContentBox .LyricsContainer")?.classList.remove("Hidden");
+          SpicyPage?.querySelector<HTMLElement>(".ContentBox")?.classList.remove("LyricsHidden");
           DeregisterNowBarBtn();
         }
       } finally {

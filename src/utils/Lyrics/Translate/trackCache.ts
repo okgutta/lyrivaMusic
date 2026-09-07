@@ -125,7 +125,11 @@ export function parseCacheKey(cacheKey: string): {
   const body = hasProvider ? rest.slice(firstColonIdx + 1) : rest;
   const lastColonIdx = body.lastIndexOf(":");
   if (lastColonIdx <= 0 || lastColonIdx === body.length - 1) return null;
-  return { provider, trackUri: body.slice(0, lastColonIdx), targetLang: body.slice(lastColonIdx + 1) };
+  return {
+    provider,
+    trackUri: body.slice(0, lastColonIdx),
+    targetLang: body.slice(lastColonIdx + 1),
+  };
 }
 
 function getIndex(): CacheIndex {
@@ -270,7 +274,10 @@ export function setTrackCache(
     trackName,
     artistName,
     api,
-    metrics: metrics && (metrics.durationMs || metrics.apiCalls || metrics.totalTokens || metrics.model) ? metrics : undefined,
+    metrics:
+      metrics && (metrics.durationMs || metrics.apiCalls || metrics.totalTokens || metrics.model)
+        ? metrics
+        : undefined,
   };
 
   const write = (): void => {
@@ -346,7 +353,12 @@ export function clearAllTrackCache(): void {
   saveIndex({ trackUris: [] });
 }
 
-export function getTrackCacheStats(): { trackCount: number; totalLines: number; sizeBytes: number; oldestTimestamp: number | null } {
+export function getTrackCacheStats(): {
+  trackCount: number;
+  totalLines: number;
+  sizeBytes: number;
+  oldestTimestamp: number | null;
+} {
   const storage = getKVStorage();
   if (!storage) return { trackCount: 0, totalLines: 0, sizeBytes: 0, oldestTimestamp: null };
   pruneTrackCache();
@@ -364,7 +376,8 @@ export function getTrackCacheStats(): { trackCount: number; totalLines: number; 
     sizeBytes += cacheKey.length * 2 + raw.length * 2;
     if (entry) {
       totalLines += entry.lines.length;
-      if (oldestTimestamp === null || entry.timestamp < oldestTimestamp) oldestTimestamp = entry.timestamp;
+      if (oldestTimestamp === null || entry.timestamp < oldestTimestamp)
+        oldestTimestamp = entry.timestamp;
     }
   }
   return { trackCount, totalLines, sizeBytes, oldestTimestamp };

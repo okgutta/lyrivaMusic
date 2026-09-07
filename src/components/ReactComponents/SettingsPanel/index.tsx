@@ -59,7 +59,13 @@ const SECTIONS = [
 ] as const;
 
 type SectionValue = (typeof SECTIONS)[number]["value"];
-type DetailId = "genius-token" | "translation-lang" | "deepseek-key" | "openai-key" | "custom-config" | "translation-model";
+type DetailId =
+  | "genius-token"
+  | "translation-lang"
+  | "deepseek-key"
+  | "openai-key"
+  | "custom-config"
+  | "translation-model";
 
 /** Apple 风格侧栏图标：极简线性、单色，视觉重量与文字一致 */
 function SidebarIcon({ value }: { value: SectionValue }) {
@@ -71,7 +77,12 @@ function SidebarIcon({ value }: { value: SectionValue }) {
     xmlns: "http://www.w3.org/2000/svg",
     "aria-hidden": true as const,
   };
-  const s = { stroke: "currentColor", strokeWidth: 1.4, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  const s = {
+    stroke: "currentColor",
+    strokeWidth: 1.4,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
   switch (value) {
     case "appearance":
       return (
@@ -145,9 +156,17 @@ function sectionFor(
     case "lyrics-display":
       return <LyricsSection query={query} sectionFilter={sectionFilter} />;
     case "lyrics-source":
-      return <LyricsSourceSection query={query} sectionFilter={sectionFilter} onOpenDetail={openDetail} />;
+      return (
+        <LyricsSourceSection
+          query={query}
+          sectionFilter={sectionFilter}
+          onOpenDetail={openDetail}
+        />
+      );
     case "lyrics-service":
-      return <ServicesSection query={query} sectionFilter={sectionFilter} onOpenDetail={openDetail} />;
+      return (
+        <ServicesSection query={query} sectionFilter={sectionFilter} onOpenDetail={openDetail} />
+      );
     case "playback":
       return <PlaybackSection query={query} sectionFilter={sectionFilter} />;
     case "cache":
@@ -198,11 +217,9 @@ export default function SettingsPanel() {
     const groups = scrollRef.current?.querySelectorAll<HTMLElement>(".sl-sp-section");
     if (!groups) return;
     setSearchEmpty(
-      Array.from(groups).every(
-        (g) => g.querySelectorAll(".sl-sp-row, .sl-sp-nav-row").length === 0
-      )
+      Array.from(groups).every((g) => g.querySelectorAll(".sl-sp-row, .sl-sp-nav-row").length === 0)
     );
-  });
+  }, [searching, query, activeCategory, detail]);
 
   const onRailKeyDown = (e: React.KeyboardEvent) => {
     const keys = ["ArrowDown", "ArrowUp", "Home", "End"];
@@ -232,7 +249,13 @@ export default function SettingsPanel() {
       <div className="sl-sp-sidebar">
         <div className="sl-sp-sidebar-head">
           <span className="sl-sp-brand-mark" aria-hidden="true">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
               <path
                 d="M4 10.5v-5M8 12.5v-9M12 10.5v-5"
                 stroke="currentColor"
@@ -242,7 +265,7 @@ export default function SettingsPanel() {
             </svg>
           </span>
           <div>
-            <h1 className="sl-sp-sidebar-title">Lyra 设置</h1>
+            <h1 className="sl-sp-sidebar-title">lyrivaMusic 设置</h1>
             <p className="sl-sp-sidebar-subtitle">自定义歌词体验</p>
           </div>
         </div>
@@ -271,7 +294,7 @@ export default function SettingsPanel() {
 
         <div className="sl-sp-sidebar-version" aria-label={`版本 ${version}`}>
           <span className="sl-sp-version-dot" aria-hidden="true" />
-          Lyra v{version}
+          lyrivaMusic v{version}
         </div>
       </div>
 
@@ -282,7 +305,13 @@ export default function SettingsPanel() {
           onClick={() => PopupModal.hide()}
           aria-label="关闭设置"
         >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 14 14"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
             <path
               d="M2.5 2.5l9 9M11.5 2.5l-9 9"
               stroke="currentColor"
@@ -314,9 +343,20 @@ export default function SettingsPanel() {
               {searchEmpty && (
                 <div className="sl-sp-empty">
                   <span className="sl-sp-empty-icon" aria-hidden="true">
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
                       <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.6" />
-                      <path d="M13.5 13.5L17.5 17.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                      <path
+                        d="M13.5 13.5L17.5 17.5"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                      />
                     </svg>
                   </span>
                   <p className="sl-sp-empty-title">没有找到相关设置</p>

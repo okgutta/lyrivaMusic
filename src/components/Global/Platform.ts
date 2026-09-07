@@ -79,7 +79,7 @@ const Platform = {
   GetSpotifyAccessToken,
   get SpotifyVersion(): number[] {
     return Spicetify.Platform.version.split(".").map((i: string) => Number.parseInt(i, 10));
-  }
+  },
 };
 
 export default Platform;

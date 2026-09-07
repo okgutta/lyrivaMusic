@@ -67,9 +67,9 @@ export function ApplyLineLyrics(data: LyricsData, UseRomanized: boolean = false)
   // 防御：畸形载荷（Content 缺失/非数组）不应白屏——统一按空数组处理
   const content = Array.isArray(data.Content) ? data.Content : [];
 
-  const hasOppositeAligned = content.some(item => item.OppositeAligned === true);
+  const hasOppositeAligned = content.some((item) => item.OppositeAligned === true);
   LyricsContainer.classList.toggle("HasDuetLines", hasOppositeAligned);
-  const hasRtlLines = content.some(line => isRtl(line.Text));
+  const hasRtlLines = content.some((line) => isRtl(line.Text));
   LyricsContainer.classList.toggle("HasRtlLines", hasRtlLines);
 
   LyricsContainer.setAttribute("data-lyrics-type", "Line");
@@ -208,9 +208,8 @@ export function ApplyLineLyrics(data: LyricsData, UseRomanized: boolean = false)
     // - 最后一行（无下一行）：用本行开始 + 默认时长兜底（否则最后一行
     //   永不高亮），默认时长取一个合理值（4 秒，覆盖最后一句的演唱）。
     const DEFAULT_LAST_LINE_MS = 4000;
-    const lastLineFallbackEndTime = line.EndTime <= line.StartTime
-      ? line.StartTime + DEFAULT_LAST_LINE_MS / 1000
-      : line.EndTime;
+    const lastLineFallbackEndTime =
+      line.EndTime <= line.StartTime ? line.StartTime + DEFAULT_LAST_LINE_MS / 1000 : line.EndTime;
 
     const fallbackEndTime =
       nextLineStartTime !== 0 && nextLineStartTime > line.EndTime
@@ -250,8 +249,7 @@ export function ApplyLineLyrics(data: LyricsData, UseRomanized: boolean = false)
         HTMLElement: musicalLine,
         StartTime: ConvertTime(line.EndTime),
         EndTime: ConvertTime(arr[index + 1].StartTime),
-        TotalTime:
-          ConvertTime(arr[index + 1].StartTime) - ConvertTime(line.EndTime),
+        TotalTime: ConvertTime(arr[index + 1].StartTime) - ConvertTime(line.EndTime),
         DotLine: true,
       });
 
@@ -274,7 +272,10 @@ export function ApplyLineLyrics(data: LyricsData, UseRomanized: boolean = false)
       const dotPadding = getInterludeTimePadding() / 3;
       const dot1EndTime = Math.max(gapStartTime, gapStartTime + baseDotTime + dotPadding);
       const dot2EndTime = Math.max(dot1EndTime, gapStartTime + baseDotTime * 2 + dotPadding * 2);
-      const dot3EndTime = Math.max(dot2EndTime, gapStartTime + totalTime + getInterludeTimePadding());
+      const dot3EndTime = Math.max(
+        dot2EndTime,
+        gapStartTime + totalTime + getInterludeTimePadding()
+      );
 
       musicalDots1.classList.add("word");
       musicalDots1.classList.add("dot");

@@ -1,7 +1,11 @@
 // @ts-ignore pkg has no @types on npm
 import Spline from "cubic-spline";
 import { easeSinOut } from "d3-ease";
-import { $currentLyricsType, $simpleLyricsMode, $simpleLyricsModeRenderingType } from "../../../../utils/stores.ts";
+import {
+  $currentLyricsType,
+  $simpleLyricsMode,
+  $simpleLyricsModeRenderingType,
+} from "../../../../utils/stores.ts";
 import {
   LyricsObject,
   SimpleLyricsMode_LetterEffectsStrengthConfig,
@@ -76,9 +80,7 @@ const ScaleSpline = GetSpline(ScaleRange);
 let LetterScaleSpline = GetSpline(
   $simpleLyricsMode.get() ? SimpleLetterScaleRange : LetterScaleRange
 );
-let YOffsetSpline = GetSpline(
-  $simpleLyricsMode.get() ? SimpleYOffsetRange : YOffsetRange
-);
+let YOffsetSpline = GetSpline($simpleLyricsMode.get() ? SimpleYOffsetRange : YOffsetRange);
 
 const LetterYOffsetRange = [
   { Time: 0, Value: 1 / 100 },
@@ -86,13 +88,11 @@ const LetterYOffsetRange = [
   { Time: 1, Value: 0 },
 ];
 
-
 const SimpleLetterYOffsetRange = [
   { Time: 0, Value: 1 / 100 },
   { Time: 0.9, Value: -(1 / 62) },
   { Time: 1, Value: 0 },
 ];
-
 
 let LetterYOffsetSpline = GetSpline(
   $simpleLyricsMode.get() ? SimpleLetterYOffsetRange : LetterYOffsetRange
@@ -713,12 +713,7 @@ export function Animate(position: number): void {
               `${4 + 6 * currentGlow}px`,
               0.5
             ); // Match inspiration
-            setStyleIfChanged(
-              word.HTMLElement,
-              "--text-shadow-opacity",
-              `${currentGlow * 90}%`,
-              1
-            ); // Match inspiration
+            setStyleIfChanged(word.HTMLElement, "--text-shadow-opacity", `${currentGlow * 90}%`, 1); // Match inspiration
           }
 
           if (isLetterGroup && word.Letters) {
@@ -785,7 +780,7 @@ export function Animate(position: number): void {
 
                   const config = SimpleLyricsMode_LetterEffectsStrengthConfig;
                   const baseScale =
-                  LetterScaleSpline.at(percentageCount) *
+                    LetterScaleSpline.at(percentageCount) *
                     ($simpleLyricsMode.get()
                       ? word.TotalTime > config.LongerThan
                         ? config.Longer.Scale
@@ -819,7 +814,7 @@ export function Animate(position: number): void {
                   // Make the falloff much steeper for a bolder active letter scaling
                   const falloff = Math.max(0, 1 / (1 + Math.pow(distance, 2.8)));
                   const glowFalloff = Math.max(0, 1 / (1 + distance * 0.9));
-          
+
                   // Apply the proximity-based animation values
                   targetScale = restingScale + (baseScale - restingScale) * falloff;
                   targetYOffset = restingYOffset + (baseYOffset - restingYOffset) * falloff;
@@ -1099,7 +1094,6 @@ export function Animate(position: number): void {
           line.HTMLElement.classList.remove("pre-hidden");
         }
 
-
         const checkNextLine = () => {
           const words = line.Syllables?.Lead;
           if (!words) return;
@@ -1346,12 +1340,7 @@ export function Animate(position: number): void {
               `${4 + 6 * currentGlow}px`,
               0.5
             );
-            setStyleIfChanged(
-              dot.HTMLElement,
-              "--text-shadow-opacity",
-              `${currentGlow * 90}%`,
-              1
-            );
+            setStyleIfChanged(dot.HTMLElement, "--text-shadow-opacity", `${currentGlow * 90}%`, 1);
           }
         } else {
           // Existing Line animation (non-dot) -> Refactored to use Spring
@@ -1387,12 +1376,7 @@ export function Animate(position: number): void {
               `${4 + 8 * currentGlow}px`,
               0.5
             );
-            setStyleIfChanged(
-              line.HTMLElement,
-              "--text-shadow-opacity",
-              `${currentGlow * 50}%`,
-              1
-            );
+            setStyleIfChanged(line.HTMLElement, "--text-shadow-opacity", `${currentGlow * 50}%`, 1);
           }
         }
       } else if (lineState === "NotSung") {

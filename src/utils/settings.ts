@@ -36,7 +36,7 @@ function renderPanel(element: React.ReactElement) {
 function showSettingsPanel() {
   const { container, root } = renderPanel(React.createElement(SettingsPanel));
   PopupModal.display({
-    title: "Lyra 设置",
+    title: "lyrivaMusic 设置",
     content: container,
     isLarge: true,
     modalId: MODAL_ID,
@@ -60,7 +60,10 @@ export function openSettingsPanel() {
 }
 
 export function openGeniusTokenDetail() {
-  openDetail("Genius API Token", React.createElement(DetailGeniusToken, { onBack: showSettingsPanel }));
+  openDetail(
+    "Genius API Token",
+    React.createElement(DetailGeniusToken, { onBack: showSettingsPanel })
+  );
 }
 
 export function openTranslationLanguageDetail() {
@@ -71,7 +74,10 @@ export function openTranslationLanguageDetail() {
 }
 
 export function openDeepSeekKeyDetail() {
-  openDetail("DeepSeek API Key", React.createElement(DetailDeepSeekKey, { onBack: showSettingsPanel }));
+  openDetail(
+    "DeepSeek API Key",
+    React.createElement(DetailDeepSeekKey, { onBack: showSettingsPanel })
+  );
 }
 
 export function openTranslationModelDetail() {

@@ -5,7 +5,8 @@
  *   /chat/completions 接口，仅 baseUrl / Key / 模型不同，共用同一客户端：
  *  - 每 20 行一组，行首打上 `[[SPICY_TR_<nonce>_<i>]]` 标记拼成一段文本，
  *    按标记把响应切回逐行（标记丢失时回退按换行切分）；
- *  - 失败指数退避重试 2 次；桌面端 fetch 失败（CORS/网络）回退 Spicetify.CosmosAsync。
+ *  - 失败指数退避重试 2 次；请求仅直连 HTTPS（本机回环地址可用 HTTP），
+ *    用户 API Key 不会经过共享代理。
  *
  * 【Google 免费翻译】无需配置（非官方接口，来自 Google 网页翻译内部的
  *   translate-pa 端点）。批量按位置返回，天然与输入行对齐，无需标记。
@@ -25,6 +26,7 @@ import {
   $openaiModel,
   $translationProvider,
 } from "../../stores.ts";
+import { normalizeApiBaseUrl } from "./url.ts";
 
 const translateProviderLogger = new Logger("Translation Provider");
 
@@ -37,14 +39,47 @@ const MAX_RETRIES = 2;
 const MARKER_PREFIX = "[[SPICY_TR_";
 const MARKER_REGEX = /\[\[\s*SPICY_TR_([A-Za-z0-9_]+)_(\d+)\s*\]\]/g;
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<T>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} 请求超时`)), ms);
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(new DOMException("Aborted", "AbortError"));
+  return new Promise((resolve, reject) => {
+    const finish = () => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+async function fetchWithTimeout(
+  input: string,
+  init: RequestInit,
+  label: string,
+  timeoutMs = REQUEST_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  const externalSignal = init.signal;
+  const onAbort = () => controller.abort();
+  externalSignal?.addEventListener("abort", onAbort, { once: true });
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (timedOut && !externalSignal?.aborted) throw new Error(`${label} 请求超时`);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    externalSignal?.removeEventListener("abort", onAbort);
+  }
 }
 
 /** 目标语言代码 → 提示词里的语言名 */
@@ -108,11 +143,10 @@ export function getChatProviderConfig(): ChatProviderConfig | null {
       };
     }
     case "custom": {
-      let baseUrl = $customApiBaseUrl.get()?.trim() ?? "";
+      const baseUrl = normalizeApiBaseUrl($customApiBaseUrl.get() ?? "");
       const apiKey = $customApiKey.get()?.trim() ?? "";
       const model = $customApiModel.get()?.trim() ?? "";
       if (!baseUrl || !apiKey || !model) return null;
-      baseUrl = baseUrl.replace(/\/+$/, "");
       return { label: "自定义 API", baseUrl, apiKey, model };
     }
     default:
@@ -136,32 +170,22 @@ function extractModelIds(payload: any): string[] {
 }
 
 /** 从所选 LLM 后端拉取可用模型列表（GET /models），失败抛错 */
-export async function fetchModelsForProvider(apiKey: string, signal?: AbortSignal): Promise<string[]> {
+export async function fetchModelsForProvider(
+  apiKey: string,
+  signal?: AbortSignal
+): Promise<string[]> {
   const config = getChatProviderConfig();
   if (!config) throw new Error("请先完整配置当前翻译服务");
   const headers = { Authorization: `Bearer ${apiKey || config.apiKey}` };
-
-  try {
-    const res = await fetch(`${config.baseUrl}/models`, { headers, signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const ids = extractModelIds(await res.json());
-    if (!ids.length) throw new Error("模型列表为空");
-    return ids;
-  } catch (err) {
-    if (!isCorsOrNetworkError(err)) throw err;
-    const cosmos = (globalThis as any).Spicetify?.CosmosAsync;
-    if (cosmos?.get) {
-      const data = await withTimeout(
-        cosmos.get(`${config.baseUrl}/models`, undefined, headers),
-        REQUEST_TIMEOUT_MS,
-        `${config.label} 模型列表`
-      );
-      const parsed = typeof data === "string" ? JSON.parse(data) : data;
-      const ids = extractModelIds(parsed);
-      if (ids.length) return ids;
-    }
-    throw err;
-  }
+  const res = await fetchWithTimeout(
+    `${config.baseUrl}/models`,
+    { headers, signal },
+    `${config.label} 模型列表`
+  );
+  if (!res.ok) throw new Error(`${config.label} 模型列表 HTTP ${res.status}`);
+  const ids = extractModelIds(await res.json());
+  if (!ids.length) throw new Error("模型列表为空");
+  return ids;
 }
 
 /** 清洗单行：去标记 / ``` / 编号 / "Here's the translation" 等包装残留 */
@@ -170,7 +194,10 @@ function cleanLine(text: string): string {
     .replace(MARKER_REGEX, "")
     .replace(/```[a-z0-9_-]*/gi, "")
     .replace(/^\s*\d+[.)、]\s*/g, "")
-    .replace(/^\s*(here('|')?s|here is|here are|sure[,!. ]|translation:?|translated lyrics:?|翻译如下[:：]?|译文[:：]?)\s*/i, "")
+    .replace(
+      /^\s*(here('|')?s|here is|here are|sure[,!. ]|translation:?|translated lyrics:?|翻译如下[:：]?|译文[:：]?)\s*/i,
+      ""
+    )
     .replace(/\r?\n+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -220,13 +247,7 @@ function parseLineFallback(text: string, expectedCount: number): string[] | null
   return lines.length === expectedCount ? lines : null;
 }
 
-function isCorsOrNetworkError(err: unknown): boolean {
-  if (err instanceof TypeError) return true;
-  const message = err instanceof Error ? err.message : String(err || "");
-  return /failed to fetch|networkerror|cors|load failed|超时/i.test(message);
-}
-
-/** fetch 优先，CORS/网络失败回退 CosmosAsync（桌面端走 spicetify 代理） */
+/** Direct request only: user credentials must never transit a shared proxy. */
 async function postChatCompletions(
   config: ChatProviderConfig,
   body: unknown,
@@ -238,28 +259,18 @@ async function postChatCompletions(
   };
   const url = `${config.baseUrl}/chat/completions`;
 
-  try {
-    const res = await fetch(url, {
+  const res = await fetchWithTimeout(
+    url,
+    {
       method: "POST",
       headers,
       body: JSON.stringify(body),
       signal,
-    });
-    if (!res.ok) throw new Error(`${config.label} API HTTP ${res.status}`);
-    return await res.json();
-  } catch (err) {
-    if (!isCorsOrNetworkError(err)) throw err;
-    const cosmos = (globalThis as any).Spicetify?.CosmosAsync;
-    if (cosmos?.post) {
-      const data = await withTimeout(
-        cosmos.post(url, body, headers),
-        REQUEST_TIMEOUT_MS,
-        config.label
-      );
-      return typeof data === "string" ? JSON.parse(data) : data;
-    }
-    throw err;
-  }
+    },
+    config.label
+  );
+  if (!res.ok) throw new Error(`${config.label} API HTTP ${res.status}`);
+  return await res.json();
 }
 
 async function translateChunk(
@@ -280,57 +291,48 @@ async function translateChunk(
     `2) Never include the [[SPICY_TR_...]] markers, numbering, explanations, or code fences in the output; ` +
     `3) Keep the poetic feel and rhythm where possible.`;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  const onAbort = () => controller.abort();
-  signal?.addEventListener("abort", onAbort);
+  const model = config.model;
+  // deepseek-reasoner 的 reasoning 计入 max_tokens，预算要更大，否则长 chunk 可能截断
+  const isReasoner = model === "deepseek-reasoner";
+  const payloadLen = chunk.join(" ").length;
+  const maxTokens = Math.max(payloadLen * (isReasoner ? 6 : 4), isReasoner ? 8192 : 2048);
 
-  try {
-    const model = config.model;
-    // deepseek-reasoner 的 reasoning 计入 max_tokens，预算要更大，否则长 chunk 可能截断
-    const isReasoner = model === "deepseek-reasoner";
-    const payloadLen = chunk.join(" ").length;
-    const maxTokens = Math.max(payloadLen * (isReasoner ? 6 : 4), isReasoner ? 8192 : 2048);
+  const data = await postChatCompletions(
+    config,
+    {
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: payload },
+      ],
+      temperature: 0.3,
+      max_tokens: maxTokens,
+    },
+    signal
+  );
 
-    const data = await postChatCompletions(
-      config,
-      {
-        model,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: payload },
-        ],
-        temperature: 0.3,
-        max_tokens: maxTokens,
-      },
-      controller.signal
-    );
-
-    // 记录 token 用量（OpenAI 兼容的 usage）
-    const usage = data?.usage;
-    if (usage && typeof usage === "object") {
-      if (typeof usage.prompt_tokens === "number") activeSession.inputTokens += usage.prompt_tokens;
-      if (typeof usage.completion_tokens === "number") activeSession.outputTokens += usage.completion_tokens;
-      if (typeof usage.total_tokens === "number") activeSession.totalTokens += usage.total_tokens;
-    }
-
-    const translated = data?.choices?.[0]?.message?.content?.trim();
-    if (!translated) throw new Error(`${config.label} 返回空结果`);
-
-    const parsed =
-      parseMarkedResponse(translated, chunk.length, nonce) ??
-      parseLineFallback(translated, chunk.length);
-    if (!parsed) {
-      // 不可解析：抛错走重试；重试仍失败 → 计入 failedChunks，调用方
-      // 标记不完整以便下次重试。原样返回会被当成完整结果缓存，缺失行
-      // 之后永不重试。
-      throw new Error(`${config.label} 响应无法按行解析`);
-    }
-    return parsed;
-  } finally {
-    clearTimeout(timer);
-    signal?.removeEventListener("abort", onAbort);
+  // 记录 token 用量（OpenAI 兼容的 usage）
+  const usage = data?.usage;
+  if (usage && typeof usage === "object") {
+    if (typeof usage.prompt_tokens === "number") activeSession.inputTokens += usage.prompt_tokens;
+    if (typeof usage.completion_tokens === "number")
+      activeSession.outputTokens += usage.completion_tokens;
+    if (typeof usage.total_tokens === "number") activeSession.totalTokens += usage.total_tokens;
   }
+
+  const translated = data?.choices?.[0]?.message?.content?.trim();
+  if (!translated) throw new Error(`${config.label} 返回空结果`);
+
+  const parsed =
+    parseMarkedResponse(translated, chunk.length, nonce) ??
+    parseLineFallback(translated, chunk.length);
+  if (!parsed) {
+    // 不可解析：抛错走重试；重试仍失败 → 计入 failedChunks，调用方
+    // 标记不完整以便下次重试。原样返回会被当成完整结果缓存，缺失行
+    // 之后永不重试。
+    throw new Error(`${config.label} 响应无法按行解析`);
+  }
+  return parsed;
 }
 
 /** 4xx（除 408/429）为确定性错误，重试无意义（如 Key 无效、模型不存在） */
@@ -358,7 +360,7 @@ async function retryWithBackoff<T>(
     } catch (err) {
       lastError = err;
       if (!isRetryableError(err)) throw err;
-      if (attempt < retries) await sleep(500 * (attempt + 1));
+      if (attempt < retries) await sleep(500 * (attempt + 1), signal);
     }
   }
   throw lastError;
@@ -374,7 +376,13 @@ export interface TranslateMetrics {
   failedChunks: number;
 }
 
-const activeSession: TranslateMetrics = { apiCalls: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0, failedChunks: 0 };
+const activeSession: TranslateMetrics = {
+  apiCalls: 0,
+  inputTokens: 0,
+  outputTokens: 0,
+  totalTokens: 0,
+  failedChunks: 0,
+};
 
 // ============================================================
 // Google 免费翻译（非官方 translate-pa 端点，按位置返回）
@@ -388,8 +396,9 @@ const GOOGLE_JS_PAGE =
 
 let googleAuthKey: string | null = null;
 
-async function refreshGoogleAuthKey(): Promise<string> {
-  const res = await fetch(GOOGLE_JS_PAGE);
+async function refreshGoogleAuthKey(signal?: AbortSignal): Promise<string> {
+  const res = await fetchWithTimeout(GOOGLE_JS_PAGE, { signal }, "Google auth key");
+  if (!res.ok) throw new Error(`Google auth key HTTP ${res.status}`);
   const text = await res.text();
   const match = text.match(/"X-goog-api-key"\s*:\s*"(\w{39})"/);
   if (!match) throw new Error("无法从 Google 页面刷新 auth key");
@@ -401,29 +410,35 @@ async function refreshGoogleAuthKey(): Promise<string> {
 async function googlePost(
   texts: string[],
   targetLang: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  mayRefresh = true
 ): Promise<string[]> {
   const key = googleAuthKey ?? GOOGLE_DEFAULT_AUTH_KEY;
-  const res = await fetch(GOOGLE_TRANSLATE_URL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json+protobuf",
-      "X-goog-api-key": key,
-      "user-agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
-      accept: "*/*",
+  const res = await fetchWithTimeout(
+    GOOGLE_TRANSLATE_URL,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json+protobuf",
+        "X-goog-api-key": key,
+        "user-agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+        accept: "*/*",
+      },
+      body: JSON.stringify([[texts, "auto", targetLang], "te"]),
+      signal,
     },
-    body: JSON.stringify([[texts, "auto", targetLang], "te"]),
-    signal,
-  });
-  if (res.status === 401 || res.status === 403) {
-    // key 过期/失效：刷新后由调用方重试一次
+    "Google 翻译"
+  );
+  if ((res.status === 401 || res.status === 403) && mayRefresh) {
+    // Refresh and retry here so the refreshed key is actually used. Keeping
+    // this inside googlePost also guarantees there is at most one auth retry.
     try {
-      await refreshGoogleAuthKey();
+      await refreshGoogleAuthKey(signal);
     } catch {
-      /* 刷新失败保留原错误 */
+      throw new Error(`Google 翻译 HTTP ${res.status}`);
     }
-    throw new Error(`Google 翻译 HTTP ${res.status}（auth 已刷新，可重试）`);
+    return googlePost(texts, targetLang, signal, false);
   }
   if (!res.ok) throw new Error(`Google 翻译 HTTP ${res.status}`);
   const data = await res.json();
@@ -438,11 +453,7 @@ async function googleTranslateChunk(
   signal?: AbortSignal
 ): Promise<string[]> {
   activeSession.apiCalls += 1;
-  let result = await googlePost(chunk, targetLang, signal);
-  // auth key 失效 → 刷新后重试一次
-  if (result.some((t: string) => /HTTP 40[13]/.test(t))) {
-    result = await googlePost(chunk, targetLang, signal);
-  }
+  const result = await googlePost(chunk, targetLang, signal);
   if (result.length !== chunk.length) {
     throw new Error(`Google 翻译返回行数不匹配（${result.length}/${chunk.length}）`);
   }

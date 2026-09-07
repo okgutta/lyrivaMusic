@@ -474,9 +474,7 @@ const reapplyPageBackground = () => {
     npvKawarp.dispose();
     KawarpMap.delete("npvbg");
   }
-  document
-    .querySelectorAll<HTMLElement>(".spicy-dynamic-bg")
-    .forEach((el) => el.remove());
+  document.querySelectorAll<HTMLElement>(".spicy-dynamic-bg").forEach((el) => el.remove());
   contentBox.querySelectorAll<HTMLElement>(".spicy-dynamic-bg").forEach((el) => el.remove());
   void ApplyDynamicBackground(contentBox, "lpagebg").catch((error) => {
     dynamicBgLogger.error("Failed to reapply page background", error);

@@ -1,4 +1,7 @@
-import { RemoveCurrentLyrics_AllCaches, RemoveLyricsCache } from "../../../utils/LyricsCacheTools.ts";
+import {
+  RemoveCurrentLyrics_AllCaches,
+  RemoveLyricsCache,
+} from "../../../utils/LyricsCacheTools.ts";
 import { clearTranslationCache } from "../../../utils/Lyrics/Translate/cache.ts";
 import { clearAllTrackCache } from "../../../utils/Lyrics/Translate/trackCache.ts";
 import { openTranslationCacheViewer } from "../../../utils/Lyrics/Translate/cacheViewer.ts";
@@ -73,10 +76,7 @@ export default function CacheSection({ query, sectionFilter }: Props) {
       {(r4 || r5) && (
         <Section title="翻译缓存">
           {r4 && (
-            <NavigationRow
-              label="查看翻译缓存"
-              onClick={() => openTranslationCacheViewer()}
-            />
+            <NavigationRow label="查看翻译缓存" onClick={() => openTranslationCacheViewer()} />
           )}
 
           {r5 && (

@@ -20,7 +20,11 @@ function check(name: string, cond: boolean, detail?: unknown): void {
 }
 
 // ── normalizeTrackUri ──────────────────────────────────────────────────────
-check("合法 uri 不变", normalizeTrackUri("spotify:track:4uLU6hMCjMI75M1A2tKUQC") === "spotify:track:4uLU6hMCjMI75M1A2tKUQC");
+check(
+  "合法 uri 不变",
+  normalizeTrackUri("spotify:track:4uLU6hMCjMI75M1A2tKUQC") ===
+    "spotify:track:4uLU6hMCjMI75M1A2tKUQC"
+);
 check("特殊字符替换为 _", normalizeTrackUri("a/b c?d") === "a_b_c_d", normalizeTrackUri("a/b c?d"));
 
 // ── parseCacheKey ──────────────────────────────────────────────────────────
@@ -37,9 +41,15 @@ check("无分隔冒号返回 null", parseCacheKey("SL:translationTrack:nocolon")
 check("尾部冒号（空语言）返回 null", parseCacheKey("SL:translationTrack:uri:") === null);
 
 // ── fingerprintSource ──────────────────────────────────────────────────────
-check("相同内容同指纹", fingerprintSource(["hello world", "foo"]) === fingerprintSource(["hello world", "foo"]));
+check(
+  "相同内容同指纹",
+  fingerprintSource(["hello world", "foo"]) === fingerprintSource(["hello world", "foo"])
+);
 // 归一化：大小写 / 空白折叠 / 首尾 trim 不影响指纹
-check("大小写与空白归一", fingerprintSource(["Hello  World"]) === fingerprintSource(["hello world"]));
+check(
+  "大小写与空白归一",
+  fingerprintSource(["Hello  World"]) === fingerprintSource(["hello world"])
+);
 check("行数不同指纹不同", fingerprintSource(["a"]) !== fingerprintSource(["a", "b"]));
 check("顺序敏感", fingerprintSource(["a", "b"]) !== fingerprintSource(["b", "a"]));
 check("内容不同指纹不同", fingerprintSource(["a"]) !== fingerprintSource(["b"]));

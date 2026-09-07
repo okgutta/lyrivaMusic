@@ -1,5 +1,5 @@
 /*
- * Spicy Lyrics — design tokens
+ * lyrivaMusic — design tokens
  * Apple HIG (base) + iOS Glass (overlays). Loaded before any other Spicy CSS.
  * Lyric line/word/letter rendering is out of scope and never reads from this file.
  */
@@ -38,21 +38,17 @@
      all the way around. No dark insets — that reads as a shadow stuck
      inside the element, which kills the "glass" cue. */
   --liquid-edge:
-    inset 0 1px 0 rgba(255, 255, 255, 0.38),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.38), inset 0 0 0 1px rgba(255, 255, 255, 0.12),
     inset 0 -1px 0 rgba(255, 255, 255, 0.2);
   --liquid-edge-strong:
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.18),
     inset 0 -1px 0 rgba(255, 255, 255, 0.3);
 
   /* Ambient cast: tinted near-black so dark backgrounds don't get a black
      halo. The tinted hue is the trick that makes shadows feel "from the
      surface" rather than "stamped on the page". */
-  --liquid-cast: 0 16px 40px -8px rgba(8, 10, 18, 0.55),
-    0 4px 12px -2px rgba(8, 10, 18, 0.35);
-  --liquid-cast-soft: 0 10px 24px -6px rgba(8, 10, 18, 0.42),
-    0 2px 6px -1px rgba(8, 10, 18, 0.28);
+  --liquid-cast: 0 16px 40px -8px rgba(8, 10, 18, 0.55), 0 4px 12px -2px rgba(8, 10, 18, 0.35);
+  --liquid-cast-soft: 0 10px 24px -6px rgba(8, 10, 18, 0.42), 0 2px 6px -1px rgba(8, 10, 18, 0.28);
 
   /* On-material tokens — text/icons land on a translucent surface over a
      dark page, so the legible color is still WHITE. Kept as aliases so
@@ -102,12 +98,9 @@
   --hairline-strong: rgba(255, 255, 255, 0.14);
 
   /* ─── Shadows (tinted toward the page hue so they don't read pure black) */
-  --shadow-overlay:
-    0 14px 36px -6px rgba(8, 10, 18, 0.55),
-    0 0 0 1px var(--hairline);
+  --shadow-overlay: 0 14px 36px -6px rgba(8, 10, 18, 0.55), 0 0 0 1px var(--hairline);
   --shadow-modal:
-    0 40px 88px -10px rgba(8, 10, 18, 0.7),
-    0 12px 24px -4px rgba(8, 10, 18, 0.4),
+    0 40px 88px -10px rgba(8, 10, 18, 0.7), 0 12px 24px -4px rgba(8, 10, 18, 0.4),
     0 0 0 1px var(--hairline);
 
   /* ─── Accent (neutral / iOS-mono — restraint over color) ──────────────── */

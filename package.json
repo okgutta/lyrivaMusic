@@ -1,15 +1,17 @@
 {
-  "name": "spicy-lyrics",
+  "name": "lyrivamusic",
   "author": "Spikerko",
   "type": "module",
   "scripts": {
     "sc": "spicetify-creator",
     "dev": "spicetify-creator dev",
     "build": "spicetify-creator build",
-    "test": "node --experimental-strip-types src/utils/Lyrics/matcher.test.ts && node --experimental-strip-types src/utils/ncm/parseLrc.test.ts && node --experimental-strip-types src/utils/Lyrics/Translate/detect.test.ts && node --experimental-strip-types src/utils/Lyrics/Translate/trackCache.test.ts && node --experimental-strip-types src/utils/Lyrics/lyrivaMap.test.ts",
+    "test": "node --experimental-strip-types src/modules/Whentil.test.ts && node --experimental-strip-types src/utils/Lyrics/ProcessLyrics.test.ts && node --experimental-strip-types src/utils/Lyrics/matcher.test.ts && node --experimental-strip-types src/utils/ncm/parseLrc.test.ts && node --experimental-strip-types src/utils/Lyrics/Translate/detect.test.ts && node --experimental-strip-types src/utils/Lyrics/Translate/trackCache.test.ts && node --experimental-strip-types src/utils/Lyrics/Translate/url.test.ts && node --experimental-strip-types src/utils/Lyrics/lyrivaMap.test.ts",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
-    "fmt": "oxfmt"
+    "fmt": "oxfmt",
+    "typecheck": "tsc --noEmit",
+    "check": "npm test && npm run lint && npm run typecheck"
   },
   "dependencies": {
     "@kawarp/core": "^1.2.0",
@@ -22,7 +24,6 @@
     "cyrillic-romanization": "^1.2.1",
     "d3-ease": "^3.0.1",
     "franc-all": "^7.2.0",
-    "kuroshiro": "^1.2.0",
     "langs": "^2.0.0",
     "nanostores": "^1.3.0",
     "react": "^19.2.6",

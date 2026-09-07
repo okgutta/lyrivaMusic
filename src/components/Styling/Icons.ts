@@ -1,5 +1,5 @@
 /*
- * Spicy Lyrics — Icon System
+ * lyrivaMusic — Icon System
  *
  * Unified visual language for every icon we ship:
  *  • 24×24 viewBox, designed on a 1px-aligned grid

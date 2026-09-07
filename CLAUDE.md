@@ -6,7 +6,7 @@
 # Development (watch mode — builds and syncs to Spicetify)
 bun run dev
 
-# Production build (outputs to dist/lyra.js)
+# Production build (outputs to dist/lyrivamusic.js)
 bun run build
 
 # Lint

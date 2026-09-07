@@ -1,4 +1,4 @@
-import fetchLyrics from "../../utils/Lyrics/fetchLyrics.ts";
+import fetchLyrics, { cancelLyricsFetch } from "../../utils/Lyrics/fetchLyrics.ts";
 import { $forceCompactMode } from "../../utils/uiState.ts";
 import "../../css/Loaders/DotLoader.css";
 import { DestroyAllLyricsContainers } from "../../utils/Lyrics/Applyer/CreateLyricsContainer.ts";
@@ -306,6 +306,7 @@ async function DestroyPage() {
   pageLogger.debug("Destroying page");
 
   cleanupApplyLyricsAbortController();
+  cancelLyricsFetch();
 
   if (Fullscreen.IsOpen) await Fullscreen.Close();
   if (!PageContainer) return;
@@ -374,6 +375,18 @@ Global.Event.listen("lyrics:apply", ({ Type }: { Type: string }) => {
   scheduleRemeasure(1000);
   scheduleRemeasure(1500);
 });
+
+Global.Event.listen(
+  "lyrics:enriched",
+  ({ uri, lyrics }: { uri: string; lyrics: Record<string, any> }) => {
+    // 原文已在首屏显示。只有用户当前要看罗马音时才需要重绘；
+    // 其余情况只更新 store 和按钮可用状态，避免无意义的页面跳动。
+    if (!isRomanized || !PageView.IsOpened || SpotifyPlayer.GetUri() !== uri) return;
+    void ApplyLyrics([lyrics, 200]).catch((error) => {
+      controlsLogger.error("Failed to apply background romanization", error);
+    });
+  }
+);
 
 function AppendViewControls(ReAppend: boolean = false) {
   if (IsCardMode) return;
@@ -679,7 +692,7 @@ function AppendViewControls(ReAppend: boolean = false) {
       try {
         Tooltips.Settings = Spicetify.Tippy(settingsButton, {
           ...Spicetify.TippyProps,
-          content: `Lyra 设置`,
+          content: `lyrivaMusic 设置`,
         });
         settingsButton.addEventListener("click", () => {
           openSettingsPanel();
