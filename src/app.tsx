@@ -40,6 +40,10 @@ import { IsPlaying } from "./utils/Addons.ts";
 import { requestPositionSync } from "./utils/Gets/GetProgress.ts";
 import { IntervalManager } from "./utils/IntervalManager.ts";
 import fetchLyrics from "./utils/Lyrics/fetchLyrics.ts";
+import {
+  scheduleNextLyricsPrefetch,
+  startNextLyricsPrefetching,
+} from "./utils/Lyrics/PrefetchNextLyrics.ts";
 import ApplyLyrics from "./utils/Lyrics/Global/Applyer.ts";
 import { ScrollToActiveLine } from "./utils/Scrolling/ScrollToActiveLine.ts";
 import { ScrollSimplebar } from "./utils/Scrolling/Simplebar/ScrollSimplebar.ts";
@@ -715,9 +719,8 @@ async function main() {
       if (songUri) {
         void fetchLyrics(songUri)
           .then(ApplyLyrics)
-          .catch((error) =>
-            playbackLogger.error("Failed to fetch lyrics after song change", error)
-          );
+          .catch((error) => playbackLogger.error("Failed to fetch lyrics after song change", error))
+          .finally(() => scheduleNextLyricsPrefetch());
       }
 
       const _staticBgMode = $staticBackgroundMode.get();
@@ -743,6 +746,7 @@ async function main() {
       });
     }
     Global.Event.listen("playback:songchange", onSongChange);
+    startNextLyricsPrefetching();
 
     // Warm the lyrics cache even when the lyrics page has not been opened yet.
     // fetchLyrics is UI-independent, so opening the page later can render from
@@ -751,7 +755,8 @@ async function main() {
     if (initialLyricsUri) {
       void fetchLyrics(initialLyricsUri)
         .then(ApplyLyrics)
-        .catch((error) => playbackLogger.error("Failed to prefetch initial lyrics", error));
+        .catch((error) => playbackLogger.error("Failed to prefetch initial lyrics", error))
+        .finally(() => scheduleNextLyricsPrefetch());
     }
 
     const _initStaticBgMode = $staticBackgroundMode.get();

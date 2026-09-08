@@ -34,6 +34,13 @@ type InflightFetch = {
 };
 const inflightFetches = new Map<string, InflightFetch>();
 
+export type LyricsPrefetchResult = "cached" | "fetched" | "miss" | "unavailable" | "aborted";
+type InflightLyricsPrefetch = {
+  controller: AbortController;
+  promise: Promise<LyricsPrefetchResult>;
+};
+const inflightLyricsPrefetches = new Map<string, InflightLyricsPrefetch>();
+
 function isTrackUri(uri: string): boolean {
   return /^spotify:track:[^:]+$/.test(uri) || uri.startsWith("spotify:local:");
 }
@@ -173,8 +180,8 @@ async function persistLyricsModel(
   model: LyricsPayload,
   trackId: string,
   uri: string
-): Promise<void> {
-  if (!LyricsStore) return;
+): Promise<boolean> {
+  if (!LyricsStore) return false;
   try {
     const storeEntry: LyricsCacheEntry = {
       model,
@@ -182,8 +189,10 @@ async function persistLyricsModel(
       matchInfo: model.matchInfo as LyricsCacheEntry["matchInfo"],
     };
     await LyricsStore.SetItem(trackId, storeEntry);
+    return true;
   } catch (error) {
     lyricsCacheLogger.error("Error saving lyrics to cache", error);
+    return false;
   }
 }
 
@@ -248,6 +257,98 @@ function scheduleLyricsFinalization(
   backgroundFinalizations.set(key, task);
 }
 
+async function prefetchLyricsInner(
+  target: TargetTrack,
+  signal: AbortSignal
+): Promise<LyricsPrefetchResult> {
+  if (isDev || !navigator.onLine || signal.aborted) return "aborted";
+  if (!/^spotify:track:[^:]+$/.test(target.uri) || !target.title || !target.artists.length) {
+    return "unavailable";
+  }
+
+  const trackId = target.uri.slice("spotify:track:".length);
+  try {
+    const cached = await LyricsStore.GetItem(trackId);
+    if (signal.aborted) return "aborted";
+    if (
+      cached?.model &&
+      cached.uri === target.uri &&
+      verifyMatchInfo(cached.matchInfo, target) &&
+      isValidLyricsModel(cached.model)
+    ) {
+      return "cached";
+    }
+    if (
+      cached?.notFound === true &&
+      cached.uri === target.uri &&
+      verifyIdentityOnly(cached.matchInfo, target)
+    ) {
+      return "cached";
+    }
+  } catch (error) {
+    lyricsCacheLogger.debug("下一首歌词缓存检查失败，继续预取", error);
+  }
+
+  const result = await tryLyrivaLyrics(target, signal);
+  if (signal.aborted) return "aborted";
+  if (result.kind === "ok") {
+    result.model.uri = target.uri;
+    const persisted = await persistLyricsModel(result.model, trackId, target.uri);
+    if (persisted) {
+      lyricsCacheLogger.debug("下一首歌词已预取", target.uri);
+      return "fetched";
+    }
+    return "unavailable";
+  }
+  if (result.kind === "not-found") return "miss";
+  return "unavailable";
+}
+
+/** Fetch one queued track into persistent cache without mutating current lyrics UI state. */
+export function prefetchLyrics(target: TargetTrack): Promise<LyricsPrefetchResult> {
+  const existing = inflightLyricsPrefetches.get(target.uri);
+  if (existing && !existing.controller.signal.aborted) return existing.promise;
+
+  for (const [uri, entry] of inflightLyricsPrefetches) {
+    if (uri !== target.uri) entry.controller.abort();
+  }
+
+  const controller = new AbortController();
+  let promise: Promise<LyricsPrefetchResult>;
+  promise = prefetchLyricsInner(target, controller.signal)
+    .catch((error): LyricsPrefetchResult => {
+      if (controller.signal.aborted) return "aborted";
+      lyricsCacheLogger.debug("下一首歌词预取失败", error);
+      return "unavailable";
+    })
+    .finally(() => {
+      if (inflightLyricsPrefetches.get(target.uri)?.promise === promise) {
+        inflightLyricsPrefetches.delete(target.uri);
+      }
+    });
+  inflightLyricsPrefetches.set(target.uri, { controller, promise });
+  return promise;
+}
+
+function abortLyricsPrefetchesExcept(uri: string): void {
+  for (const [prefetchUri, entry] of inflightLyricsPrefetches) {
+    if (prefetchUri !== uri) entry.controller.abort();
+  }
+}
+
+async function waitForLyricsPrefetch(uri: string, signal: AbortSignal): Promise<void> {
+  const pending = inflightLyricsPrefetches.get(uri)?.promise;
+  if (!pending || signal.aborted) return;
+  await new Promise<void>((resolve) => {
+    const finish = () => {
+      signal.removeEventListener("abort", finish);
+      resolve();
+    };
+    signal.addEventListener("abort", finish, { once: true });
+    void pending.finally(finish);
+  });
+}
+
 /**
  * 对外入口：in-flight 去重 + generation 递增 + abort 上一首在途请求。
  */
@@ -266,6 +367,7 @@ export default async function fetchLyrics(uri: string): Promise<[object | string
     lyricsLogger.debug("Ignoring malformed track URI", uri);
     return null;
   }
+  abortLyricsPrefetchesExcept(uri);
   const existing = inflightFetches.get(uri);
   if (existing && existing.generation === lyricsGeneration && !existing.controller.signal.aborted) {
     lyricsLogger.debug("In-flight hit, reusing request", uri);
@@ -390,6 +492,12 @@ async function fetchLyricsInner(
     } catch (error) {
       lyricsCacheLogger.error("Error parsing saved lyrics data", error);
     }
+  }
+
+  if (inflightLyricsPrefetches.has(uri)) {
+    ShowLoaderContainer();
+    await waitForLyricsPrefetch(uri, signal);
+    if (!isActiveRequest(gen, uri, signal)) return null;
   }
 
   // ===== 持久缓存（LyricsStore）：命中且身份一致才采用 =====

@@ -6,7 +6,7 @@
     "sc": "spicetify-creator",
     "dev": "spicetify-creator dev",
     "build": "spicetify-creator build",
-    "test": "node --experimental-strip-types src/modules/Whentil.test.ts && node --experimental-strip-types src/modules/LatestRequestGuard.test.ts && node --experimental-strip-types src/modules/Store.test.ts && node --experimental-strip-types src/utils/Lyrics/ProcessLyrics.test.ts && node --experimental-strip-types src/utils/Lyrics/matcher.test.ts && node --experimental-strip-types src/utils/ncm/parseLrc.test.ts && node --experimental-strip-types src/utils/Lyrics/Translate/detect.test.ts && node --experimental-strip-types src/utils/Lyrics/Translate/trackCache.test.ts && node --experimental-strip-types src/utils/Lyrics/Translate/url.test.ts && node --experimental-strip-types src/utils/Lyrics/lyrivaMap.test.ts",
+    "test": "node --experimental-strip-types src/modules/Whentil.test.ts && node --experimental-strip-types src/modules/LatestRequestGuard.test.ts && node --experimental-strip-types src/modules/Store.test.ts && node --experimental-strip-types src/utils/Lyrics/QueueTrackTarget.test.ts && node --experimental-strip-types src/utils/Lyrics/ProcessLyrics.test.ts && node --experimental-strip-types src/utils/Lyrics/matcher.test.ts && node --experimental-strip-types src/utils/ncm/parseLrc.test.ts && node --experimental-strip-types src/utils/Lyrics/Translate/detect.test.ts && node --experimental-strip-types src/utils/Lyrics/Translate/trackCache.test.ts && node --experimental-strip-types src/utils/Lyrics/Translate/url.test.ts && node --experimental-strip-types src/utils/Lyrics/lyrivaMap.test.ts",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "fmt": "oxfmt",
