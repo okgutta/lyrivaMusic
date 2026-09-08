@@ -43,7 +43,7 @@ import fetchLyrics from "./utils/Lyrics/fetchLyrics.ts";
 import ApplyLyrics from "./utils/Lyrics/Global/Applyer.ts";
 import { ScrollToActiveLine } from "./utils/Scrolling/ScrollToActiveLine.ts";
 import { ScrollSimplebar } from "./utils/Scrolling/Simplebar/ScrollSimplebar.ts";
-import { $fromVersion, $lastFetchedUri, $previousVersion } from "./utils/uiState.ts";
+import { $fromVersion, $previousVersion } from "./utils/uiState.ts";
 import { needsMigration, showMigrationModal } from "./utils/migration/DataMigration.tsx";
 import "./css/settings-panel.css";
 import "./css/polyfills/generic-modal-polyfill.css";
@@ -771,8 +771,6 @@ async function main() {
     }
 
     window.addEventListener("online", () => {
-      $lastFetchedUri.set(null);
-
       void fetchLyrics(Spicetify.Player.data?.item?.uri)
         .then(ApplyLyrics)
         .catch((error) =>

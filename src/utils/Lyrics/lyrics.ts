@@ -179,7 +179,10 @@ let LinesEvListenerExists: boolean = false;
 
 // Define proper type for event parameter
 function LinesEvListener(e: MouseEvent) {
-  const target = e.target as HTMLElement;
+  const eventTarget = e.target;
+  if (!(eventTarget instanceof Element)) return;
+  const target = eventTarget.closest<HTMLElement>(".line, .word, .Emphasis");
+  if (!target) return;
   if (target.classList.contains("line")) {
     let startTime: number | undefined;
 

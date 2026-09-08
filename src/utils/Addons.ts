@@ -22,39 +22,6 @@ function IsPlaying() {
   return state;
 }
 
-function TOP_ApplyLyricsSpacer(Container: HTMLElement) {
-  const div = document.createElement("div");
-  div.classList.add("TopSpacer");
-  Container.appendChild(div);
-}
-
-function BOTTOM_ApplyLyricsSpacer(Container: HTMLElement) {
-  const div = document.createElement("div");
-  div.classList.add("BottomSpacer");
-  Container.appendChild(div);
-}
-
-function GetContainerHeight(Container: HTMLElement) {
-  const style = globalThis.getComputedStyle(Container);
-  let height = parseFloat(style.marginTop);
-
-  for (const child of Array.from(Container.children)) {
-    if (child instanceof HTMLElement) {
-      const childStyle = globalThis.getComputedStyle(child);
-      height +=
-        child.offsetHeight + parseFloat(childStyle.marginTop) + parseFloat(childStyle.marginBottom);
-    }
-  }
-
-  return height;
-}
-
 export const ArabicPersianRegex = /[\u0600-\u06FF]/;
 
-export {
-  DeepFreeze,
-  IsPlaying,
-  TOP_ApplyLyricsSpacer,
-  BOTTOM_ApplyLyricsSpacer,
-  GetContainerHeight,
-};
+export { DeepFreeze, IsPlaying };

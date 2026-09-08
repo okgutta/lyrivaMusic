@@ -13,8 +13,7 @@ export const EnableCompactMode = () => {
   const SpicyLyricsPage = PageContainer;
   if (!SpicyLyricsPage) return;
 
-  const isNoLyrics =
-    $currentLyricsData.get() === `NO_LYRICS:${SpotifyPlayer.GetUri()}`;
+  const isNoLyrics = $currentLyricsData.get() === `NO_LYRICS:${SpotifyPlayer.GetUri()}`;
   if (isNoLyrics && (Fullscreen.IsOpen || Fullscreen.CinemaViewOpen || IsPIP)) {
     SpicyLyricsPage.querySelector<HTMLElement>(".ContentBox .LyricsContainer")?.classList.remove(
       "Hidden"
@@ -46,8 +45,7 @@ export const DisableCompactMode = () => {
   const SpicyLyricsPage = PageContainer;
   if (!SpicyLyricsPage) return;
 
-  const isNoLyrics =
-    $currentLyricsData.get() === `NO_LYRICS:${SpotifyPlayer.GetUri()}`;
+  const isNoLyrics = $currentLyricsData.get() === `NO_LYRICS:${SpotifyPlayer.GetUri()}`;
   if (isNoLyrics && (Fullscreen.IsOpen || Fullscreen.CinemaViewOpen || IsPIP)) {
     SpicyLyricsPage.querySelector<HTMLElement>(".ContentBox .LyricsContainer")?.classList.add(
       "Hidden"
@@ -65,11 +63,6 @@ export const DisableCompactMode = () => {
 
 export const IsCompactMode = () => {
   return CompactMode;
-};
-
-export const ToggleCompactMode = () => {
-  if (CompactMode) DisableCompactMode();
-  else EnableCompactMode();
 };
 
 $lockedMediaBox.listen((v) => {

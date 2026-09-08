@@ -11,11 +11,12 @@ import {
 } from "./BackgroundAnimationController.ts";
 import { getDynamicAudioAnalysis } from "../../utils/audioAnalysis.ts";
 import Logger from "../../utils/Logger.ts";
+import { LatestRequestGuard } from "../../modules/LatestRequestGuard.ts";
 
 const dynamicBgLogger = new Logger("Dynamic Background");
 
 const KawarpTransitionDuration = 1000;
-export const KawarpOptionsStatic: KawarpOptions = {
+const KawarpOptionsStatic: KawarpOptions = {
   warpIntensity: 1,
   blurPasses: 8,
   animationSpeed: 0.1,
@@ -32,6 +33,7 @@ let cachedColorBackgroundEl: HTMLElement | null = null;
 
 export const KawarpMap = new Map<HTMLElement | string, Kawarp>();
 const animSpeedController = new BackgroundAnimationController();
+const backgroundRequestGuard = new LatestRequestGuard<HTMLElement | string>();
 
 interface ApplyDynamicBackgroundOpts {
   doTransitionDurationAppendWithPromise?: boolean;
@@ -139,6 +141,13 @@ export default async function ApplyDynamicBackground(
   // through) — covers every caller that re-applies the page bg (songchange,
   // static-bg mode changes, etc.).
   if (element.closest("#SpicyLyricsPage.CardMode")) return;
+  const requestKey = tag ?? element;
+  const requestGeneration = backgroundRequestGuard.begin(requestKey);
+  const requestTrackUri = SpotifyPlayer.GetUri();
+  const isCurrentRequest = () =>
+    backgroundRequestGuard.isCurrent(requestKey, requestGeneration) &&
+    SpotifyPlayer.GetUri() === requestTrackUri &&
+    element.isConnected;
   dynamicBgLogger.debug("Applying dynamic background", { tag });
   const preCurrentImgCover = SpotifyPlayer.GetCover("large") ?? "";
   // Local-file art is served via the `spotify:local:` scheme and isn't on scdn,
@@ -194,6 +203,8 @@ export default async function ApplyDynamicBackground(
           }
         );
 
+        if (!isCurrentRequest()) return;
+
         const colorResponse = colorQuery.data.dynamicColors[0];
         const colorBestFit =
           colorResponse.bestFit === "DARK"
@@ -229,7 +240,7 @@ export default async function ApplyDynamicBackground(
     }
     const currentImgCover = await GetStaticBackground(TrackArtist, TrackId);
 
-    if (IsEpisode || !currentImgCover) return;
+    if (!isCurrentRequest() || IsEpisode || !currentImgCover) return;
     const prevBg = element.querySelector<HTMLElement>(".spicy-dynamic-bg.StaticBackground");
 
     if (prevBg && prevBg.getAttribute("data-cover-id") === currentImgCover) {
@@ -249,6 +260,8 @@ export default async function ApplyDynamicBackground(
       : await BlobURLMaker(finalUrl)
           .then((blobUrl) => blobUrl ?? currentImgCover)
           .catch(() => currentImgCover);
+
+    if (!isCurrentRequest()) return;
 
     const dynamicBg = document.createElement("div");
 
@@ -282,6 +295,7 @@ export default async function ApplyDynamicBackground(
     // Resolve a Kawarp-loadable source up front (rasterizing local art if needed)
     // so we can bail before touching any instance when there's nothing to show.
     const kawarpSource = await resolveKawarpSource(currentImgCover, isLocalCover);
+    if (!isCurrentRequest()) return;
     if (!kawarpSource) {
       dynamicBgLogger.warn("No loadable cover for dynamic background; skipping", {
         currentImgCover,
@@ -289,39 +303,50 @@ export default async function ApplyDynamicBackground(
       return;
     }
 
-    const liveElement = element.querySelector<HTMLElement>(".spicy-dynamic-bg");
-    if (liveElement) {
-      const kawarpInstance = KawarpMap.get(tag ? tag : liveElement);
-
-      if (kawarpInstance) {
-        liveElement.setAttribute("data-cover-id", currentImgCover ?? "");
-        await loadKawarpSource(kawarpInstance, kawarpSource);
-        kawarpInstance.start();
-        return;
-      }
-    }
-
     const canvas = document.createElement("canvas");
     canvas.classList.add("spicy-dynamic-bg");
     canvas.setAttribute("data-cover-id", currentImgCover ?? "");
-
-    const kawarpInstance = new Kawarp(canvas, KawarpOptionsStatic);
-    // 覆盖同 tag 的旧实例前先 dispose，避免旧 Kawarp（持 WebGL 上下文与
-    // 渲染循环）成为孤儿继续空转
-    const existing = KawarpMap.get(tag ? tag : canvas);
-    if (existing) existing.dispose();
-    KawarpMap.set(tag ? tag : canvas, kawarpInstance);
+    canvas.style.visibility = "hidden";
     element.appendChild(canvas);
-    await loadKawarpSource(kawarpInstance, kawarpSource);
+
+    let kawarpInstance: Kawarp;
+    try {
+      kawarpInstance = new Kawarp(canvas, KawarpOptionsStatic);
+      await loadKawarpSource(kawarpInstance, kawarpSource);
+    } catch (error) {
+      canvas.remove();
+      throw error;
+    }
+
+    // Each request loads into its own candidate instance. Loading directly into
+    // the live Kawarp lets an older, slower request overwrite a newer cover even
+    // when its completion is ignored afterwards.
+    if (!isCurrentRequest()) {
+      kawarpInstance.dispose();
+      canvas.remove();
+      return;
+    }
+
+    const existing = KawarpMap.get(requestKey);
+    if (existing) existing.dispose();
+    element
+      .querySelectorAll<HTMLElement>(".spicy-dynamic-bg")
+      .forEach((background) => background !== canvas && background.remove());
+    KawarpMap.set(requestKey, kawarpInstance);
+    canvas.style.visibility = "";
     kawarpInstance.start();
     const msDelay = (KawarpOptionsStatic.transitionDuration ?? 0) * 2;
 
     if (opts?.doTransitionDurationAppendWithPromise) {
       await new Promise((r) => setTimeout(r, msDelay));
-      kawarpInstance.setOptions({ transitionDuration: KawarpTransitionDuration });
+      if (backgroundRequestGuard.isCurrent(requestKey, requestGeneration)) {
+        kawarpInstance.setOptions({ transitionDuration: KawarpTransitionDuration });
+      }
     } else {
       setTimeout(() => {
-        kawarpInstance.setOptions({ transitionDuration: KawarpTransitionDuration });
+        if (backgroundRequestGuard.isCurrent(requestKey, requestGeneration)) {
+          kawarpInstance.setOptions({ transitionDuration: KawarpTransitionDuration });
+        }
       }, msDelay);
     }
   }
@@ -377,12 +402,25 @@ Global.Event.listen("playback:songchange", () => {
     }
 
     staticColorBgTransitionTimeout = setTimeout(() => {
+      if (!pageContainer.isConnected) {
+        staticColorBgTransitionTimeout = null;
+        return;
+      }
       const contentBox = pageContainer.querySelector<HTMLElement>(".ContentBox");
-      if (contentBox) ApplyDynamicBackground(contentBox);
+      if (contentBox) ApplyDynamicBackground(contentBox, "lpagebg");
 
       staticColorBgTransitionTimeout = null;
     }, 1000);
   }
+});
+
+Global.Event.listen("page:destroy", () => {
+  if (staticColorBgTransitionTimeout) {
+    clearTimeout(staticColorBgTransitionTimeout);
+    staticColorBgTransitionTimeout = null;
+  }
+  cachedColorBackgroundEl = null;
+  backgroundRequestGuard.invalidate("lpagebg");
 });
 
 /** Successful analysis, or `null` once we know the track has no analysis (stops progress-handler spam). */
@@ -468,13 +506,6 @@ const reapplyPageBackground = () => {
     kawarp.dispose();
     KawarpMap.delete("lpagebg");
   }
-  // NPV 动态背景也要清理（同 tag 或同元素）
-  const npvKawarp = KawarpMap.get("npvbg");
-  if (npvKawarp) {
-    npvKawarp.dispose();
-    KawarpMap.delete("npvbg");
-  }
-  document.querySelectorAll<HTMLElement>(".spicy-dynamic-bg").forEach((el) => el.remove());
   contentBox.querySelectorAll<HTMLElement>(".spicy-dynamic-bg").forEach((el) => el.remove());
   void ApplyDynamicBackground(contentBox, "lpagebg").catch((error) => {
     dynamicBgLogger.error("Failed to reapply page background", error);

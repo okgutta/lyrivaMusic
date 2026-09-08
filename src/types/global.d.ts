@@ -6,5 +6,4 @@ declare global {
   const __SLdev__m: boolean;
 }
 
-
 export {};

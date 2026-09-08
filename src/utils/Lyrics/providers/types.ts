@@ -2,7 +2,10 @@
 // 绝不自行决定「这就是目标歌曲」——匹配交给统一的 lyrivaMusic Matcher。
 // 日志一律通过传入的 LyraLogger（一次请求一个 requestId）；不自行 console。
 import type { Candidate, LyricsPayload, LyricSource, TargetTrack } from "../matcher.ts";
-import type { LyraLogger } from "../../LyraLogger.ts";
+
+export interface LyraLogger {
+  debug(message: unknown): void;
+}
 
 export interface LyricProvider {
   source: LyricSource;
@@ -14,14 +17,6 @@ export interface LyricProvider {
     signal?: AbortSignal,
     log?: LyraLogger
   ): Promise<LyricsPayload | null>;
-}
-
-/** 取歌词行数（Line 看 Content，Static 看 Lines） */
-export function linesOf(payload: LyricsPayload | null | undefined): number {
-  if (!payload) return 0;
-  if (payload.Type === "Line" && Array.isArray(payload.Content)) return payload.Content.length;
-  if (payload.Type === "Static" && Array.isArray(payload.Lines)) return payload.Lines.length;
-  return 0;
 }
 
 /** 最小行数校验：没有足够内容的歌词不采信（防空壳/错配） */

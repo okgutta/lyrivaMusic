@@ -17,7 +17,7 @@ class Logger {
       $developerMode.subscribe((v) => {
         this.isEnabled = v;
       })
-    )
+    );
   }
 
   private getPrefixArgs(): [string, string] {

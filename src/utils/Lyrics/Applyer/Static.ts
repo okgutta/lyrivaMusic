@@ -2,24 +2,17 @@ import { $lyricsContainerExists } from "../../../utils/stores.ts";
 import { PageContainer } from "../../../components/Pages/PageView.ts";
 import { type StyleProperties, applyStyles, removeAllStyles } from "../../CSS/Styles.ts";
 import {
-  ClearScrollSimplebar,
   MountScrollSimplebar,
   RecalculateScrollSimplebar,
   ScrollSimplebar,
 } from "../../Scrolling/Simplebar/ScrollSimplebar.ts";
-import { ClearLyricsPageContainer } from "../fetchLyrics.ts";
 import isRtl from "../isRtl.ts";
-import {
-  ClearLyricsContentArrays,
-  LyricsObject,
-  type LyricsStatic,
-  setRomanizedStatus,
-} from "../lyrics.ts";
-import { CreateLyricsContainer, DestroyAllLyricsContainers } from "./CreateLyricsContainer.ts";
+import { LyricsObject, type LyricsStatic, setRomanizedStatus } from "../lyrics.ts";
+import { CreateLyricsContainer } from "./CreateLyricsContainer.ts";
 import { initLyricsVirtualizer } from "../LyricsVirtualizer.ts";
 import { ApplyIsByCommunity } from "./Credits/ApplyIsByCommunity.tsx";
 import { ApplyLyricsCredits } from "./Credits/ApplyLyricsCredits.ts";
-import { EmitApply, EmitNotApplyed } from "./OnApply.ts";
+import { EmitApply } from "./OnApply.ts";
 import { ApplyLyricsProvider } from "./Credits/ApplyProvider.ts";
 
 /**
@@ -45,10 +38,6 @@ export interface StaticLyricsData {
 export function ApplyStaticLyrics(data: StaticLyricsData, UseRomanized: boolean = false): void {
   if (!$lyricsContainerExists.get()) return;
 
-  EmitNotApplyed();
-
-  DestroyAllLyricsContainers();
-
   const LyricsContainerParent = PageContainer?.querySelector<HTMLElement>(
     ".LyricsContainer .LyricsContent"
   );
@@ -61,14 +50,10 @@ export function ApplyStaticLyrics(data: StaticLyricsData, UseRomanized: boolean 
   }
 
   LyricsContainer.classList.remove("HasDuetLines");
-  const hasRtlLines = data.Lines.some(line => isRtl(line.Text));
+  const hasRtlLines = data.Lines.some((line) => isRtl(line.Text));
   LyricsContainer.classList.toggle("HasRtlLines", hasRtlLines);
 
   LyricsContainer.setAttribute("data-lyrics-type", "Static");
-
-  ClearLyricsContentArrays();
-  ClearScrollSimplebar();
-  ClearLyricsPageContainer();
 
   const virtualContainer = document.createElement("div");
   virtualContainer.classList.add("VirtualLyricsContainer");

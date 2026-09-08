@@ -1,4 +1,4 @@
-import { $playbackOffset } from "../stores.ts";
+import { $lyricsContainerExists, $playbackOffset } from "../stores.ts";
 import { SpotifyPlayer } from "./../../components/Global/SpotifyPlayer.ts";
 
 interface SyncedPosition {
@@ -51,6 +51,24 @@ const JITTER_TIME_CONSTANT = 300;
 // Sits above a deliberate seek (>=1s) so ordinary state-update noise never
 // discards a healthy anchor.
 const LOCAL_ANCHOR_RESYNC_THRESHOLD = 1000;
+// Position samples are extrapolated between polls, so querying Spotify's private
+// context-player bridge every animation frame adds IPC load without improving the
+// visible clock. Poll a little faster while lyrics are mounted and back off when
+// the feature is idle or the document is hidden.
+const ACTIVE_SYNC_INTERVAL_MS = 250;
+const IDLE_SYNC_INTERVAL_MS = 1000;
+
+function getNextSyncDelayMs(): number {
+  if (canSyncNonLocalTimestamp > 0) {
+    return (
+      (syncTimings[syncTimings.length - canSyncNonLocalTimestamp] ??
+        ACTIVE_SYNC_INTERVAL_MS / 1000) * 1000
+    );
+  }
+  return $lyricsContainerExists.get() && !document.hidden
+    ? ACTIVE_SYNC_INTERVAL_MS
+    : IDLE_SYNC_INTERVAL_MS;
+}
 
 function clampToTrack(position: number): number {
   const duration = SpotifyPlayer.GetDuration();
@@ -240,13 +258,7 @@ export const requestPositionSync = () => {
         console.error("Sync Position: Poll failed, More Details:", error);
       })
       .then(() => {
-        const delay = isLocallyPlaying
-          ? 1 / 60
-          : canSyncNonLocalTimestamp === 0
-            ? 1 / 60
-            : syncTimings[syncTimings.length - canSyncNonLocalTimestamp];
-
-        setTimeout(requestPositionSync, delay * 1000);
+        setTimeout(requestPositionSync, getNextSyncDelayMs());
       });
   } catch (error) {
     console.error("Sync Position: Fail, More Details:", error);

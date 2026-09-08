@@ -43,8 +43,7 @@ export const EXPERIMENTS = [
   {
     id: "newProgressBarStyling",
     label: "新进度条样式",
-    description:
-      "进度条的新玻璃质感样式。关闭可恢复为原来的样式。",
+    description: "进度条的新玻璃质感样式。关闭可恢复为原来的样式。",
     default: true,
     pageClass: "Exp_NewProgressBar",
   },
@@ -70,10 +69,6 @@ export function $experiment(id: ExperimentId): ExperimentStore {
 
 export function isExperimentEnabled(id: ExperimentId): boolean {
   return stores.get(id)?.get() ?? false;
-}
-
-export function setExperiment(id: ExperimentId, value: boolean): void {
-  stores.get(id)?.set(value);
 }
 
 /** Sync every experiment's `pageClass` onto the page root. Safe to call anytime. */

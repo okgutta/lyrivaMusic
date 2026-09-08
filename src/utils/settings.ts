@@ -3,12 +3,6 @@ import ReactDOM from "react-dom/client";
 import { flushSync } from "react-dom";
 import { PopupModal } from "../components/Modal.ts";
 import SettingsPanel from "../components/ReactComponents/SettingsPanel/index.tsx";
-import {
-  DetailGeniusToken,
-  DetailTranslationLanguage,
-  DetailDeepSeekKey,
-  DetailTranslationModel,
-} from "../components/ReactComponents/SettingsPanel/DetailPages.tsx";
 
 const MODAL_ID = "settingsPanel";
 
@@ -44,45 +38,6 @@ function showSettingsPanel() {
   });
 }
 
-/** 二级页：从设置主面板进入详情页（Token/语言/模型等），带返回 */
-function openDetail(title: string, element: React.ReactElement) {
-  const { container, root } = renderPanel(element);
-  PopupModal.transition({
-    title,
-    content: container,
-    modalId: MODAL_ID,
-    onClose: () => root.unmount(),
-  });
-}
-
 export function openSettingsPanel() {
   showSettingsPanel();
-}
-
-export function openGeniusTokenDetail() {
-  openDetail(
-    "Genius API Token",
-    React.createElement(DetailGeniusToken, { onBack: showSettingsPanel })
-  );
-}
-
-export function openTranslationLanguageDetail() {
-  openDetail(
-    "翻译目标语言",
-    React.createElement(DetailTranslationLanguage, { onBack: showSettingsPanel })
-  );
-}
-
-export function openDeepSeekKeyDetail() {
-  openDetail(
-    "DeepSeek API Key",
-    React.createElement(DetailDeepSeekKey, { onBack: showSettingsPanel })
-  );
-}
-
-export function openTranslationModelDetail() {
-  openDetail(
-    "翻译模型",
-    React.createElement(DetailTranslationModel, { onBack: showSettingsPanel })
-  );
 }

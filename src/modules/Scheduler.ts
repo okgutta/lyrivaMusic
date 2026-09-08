@@ -5,33 +5,29 @@ const SchedulerEnums = {
 } as const;
 
 export type ScheduledCallback = (...args: any[]) => void;
-export type SchedulerValue =
-  (typeof SchedulerEnums)[keyof typeof SchedulerEnums];
+export type SchedulerValue = (typeof SchedulerEnums)[keyof typeof SchedulerEnums];
 export type ScheduledDataObject = {
   cancelled: boolean;
 };
 export type Scheduled = [SchedulerValue, number, ScheduledDataObject];
 
-const Timeout =
-  (cb: ScheduledCallback, ms: number): Scheduled => [
-    SchedulerEnums.timeout,
-    window.setTimeout(cb, ms),
-    { cancelled: false },
-  ];
+const Timeout = (cb: ScheduledCallback, ms: number): Scheduled => [
+  SchedulerEnums.timeout,
+  window.setTimeout(cb, ms),
+  { cancelled: false },
+];
 
-const Interval =
-  (cb: ScheduledCallback, ms: number): Scheduled => [
-    SchedulerEnums.interval,
-    window.setInterval(cb, ms),
-    { cancelled: false },
-  ];
+const Interval = (cb: ScheduledCallback, ms: number): Scheduled => [
+  SchedulerEnums.interval,
+  window.setInterval(cb, ms),
+  { cancelled: false },
+];
 
-const OnPreRender =
-  (cb: ScheduledCallback): Scheduled => [
-    SchedulerEnums.raf,
-    requestAnimationFrame(cb),
-    { cancelled: false },
-  ];
+const OnPreRender = (cb: ScheduledCallback): Scheduled => [
+  SchedulerEnums.raf,
+  requestAnimationFrame(cb),
+  { cancelled: false },
+];
 
 const Cancel = (scheduledItems: Scheduled | Array<Scheduled>) => {
   const normalizedItems = Array.isArray(scheduledItems[0])

@@ -2,9 +2,7 @@ import fetchLyrics, { cancelLyricsFetch } from "../../utils/Lyrics/fetchLyrics.t
 import { $forceCompactMode } from "../../utils/uiState.ts";
 import "../../css/Loaders/DotLoader.css";
 import { DestroyAllLyricsContainers } from "../../utils/Lyrics/Applyer/CreateLyricsContainer.ts";
-import ApplyLyrics, {
-  cleanupApplyLyricsAbortController,
-} from "../../utils/Lyrics/Global/Applyer.ts";
+import ApplyLyrics from "../../utils/Lyrics/Global/Applyer.ts";
 import {
   addLinesEvListener,
   isRomanized,
@@ -305,7 +303,6 @@ async function DestroyPage() {
   if (!PageView.IsOpened) return;
   pageLogger.debug("Destroying page");
 
-  cleanupApplyLyricsAbortController();
   cancelLyricsFetch();
 
   if (Fullscreen.IsOpen) await Fullscreen.Close();

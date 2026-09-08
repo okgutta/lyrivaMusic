@@ -26,7 +26,6 @@ const OLD_UI_STATE_KEYS = [
   "ForceCompactMode",
   "romanization",
   "fromVersion",
-  "lastFetchedUri",
   "previous-version",
 ];
 

@@ -4,7 +4,7 @@
  * Status icon stays subtly tinted but the toast itself is neutral.
  */
 
-[data-sonner-toaster][data-theme='dark'] {
+[data-sonner-toaster][data-theme="dark"] {
   --normal-bg: var(--material-regular-bg);
   --normal-border: var(--on-material-hairline);
   --normal-text: var(--on-material-text-primary);
@@ -27,8 +27,7 @@
 
   --border-radius: var(--radius-md);
   --shadow:
-    var(--liquid-cast-soft),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    var(--liquid-cast-soft), inset 0 1px 0 rgba(255, 255, 255, 0.5),
     inset 0 0 0 1px var(--on-material-hairline);
   --description-color: var(--on-material-text-tertiary);
   font-size: 0.85rem;
@@ -50,10 +49,10 @@
 }
 
 /* Status icons — neutral primary on light material */
-[data-sonner-toast][data-type='success'] [data-icon],
-[data-sonner-toast][data-type='error'] [data-icon],
-[data-sonner-toast][data-type='warning'] [data-icon],
-[data-sonner-toast][data-type='info'] [data-icon] {
+[data-sonner-toast][data-type="success"] [data-icon],
+[data-sonner-toast][data-type="error"] [data-icon],
+[data-sonner-toast][data-type="warning"] [data-icon],
+[data-sonner-toast][data-type="info"] [data-icon] {
   color: var(--on-material-text-primary) !important;
 }
 
@@ -74,7 +73,9 @@
   border: 1px solid var(--on-material-hairline) !important;
   color: var(--on-material-text-secondary) !important;
   border-radius: 6px !important;
-  transition: background 0.15s, color 0.15s !important;
+  transition:
+    background 0.15s,
+    color 0.15s !important;
 }
 
 [data-sonner-toast] [data-close-button]:hover {

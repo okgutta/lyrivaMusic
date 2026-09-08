@@ -14,7 +14,7 @@
 }
 
 @property --SL-LyricsContent_MaskTopPadding {
-  syntax: '<length>';
+  syntax: "<length>";
   inherits: false;
   initial-value: 0px;
 }
@@ -53,10 +53,14 @@
   mask-image: var(--ImageMask);
   container-type: size;
   opacity: 1;
-  transition: opacity 0.25s, --SL-LyricsContent_MaskTopPadding 0.5s;
+  transition:
+    opacity 0.25s,
+    --SL-LyricsContent_MaskTopPadding 0.5s;
 }
 
-#SpicyLyricsPage:not(.Fullscreen):has(.ViewControls .ViewControl:hover) .LyricsContainer .LyricsContent {
+#SpicyLyricsPage:not(.Fullscreen):has(.ViewControls .ViewControl:hover)
+  .LyricsContainer
+  .LyricsContent {
   --SL-LyricsContent_MaskTopPadding: 32px;
 }
 
@@ -97,12 +101,20 @@
   margin-top: 25cqh;
 }
 
-body:has(.Root:not(.global-nav)) #SpicyLyricsPage .LyricsContainer .LyricsContent .SpicyLyricsScrollContainer {
+body:has(.Root:not(.global-nav))
+  #SpicyLyricsPage
+  .LyricsContainer
+  .LyricsContent
+  .SpicyLyricsScrollContainer {
   margin-top: 0cqh;
   padding-top: 25cqh;
 }
 
-#SpicyLyricsPage .LyricsContainer .LyricsContent .SpicyLyricsScrollContainer .VirtualLyricsContainer {
+#SpicyLyricsPage
+  .LyricsContainer
+  .LyricsContent
+  .SpicyLyricsScrollContainer
+  .VirtualLyricsContainer {
   position: relative;
   width: 100%;
   container-type: size;
@@ -112,7 +124,12 @@ body:has(.Root:not(.global-nav)) #SpicyLyricsPage .LyricsContainer .LyricsConten
 /* With position:absolute, CSS margins don't collapse between siblings.
    Clear them here — TanStack Virtual's gap option provides equivalent spacing.
    Specificity (1,6,0) beats Mixed.css rules at (1,5,0) that are loaded after this file. */
-#SpicyLyricsPage.SpicyRenderer .LyricsContainer .LyricsContent .SpicyLyricsScrollContainer .VirtualLyricsContainer .line {
+#SpicyLyricsPage.SpicyRenderer
+  .LyricsContainer
+  .LyricsContent
+  .SpicyLyricsScrollContainer
+  .VirtualLyricsContainer
+  .line {
   margin: 0 !important;
 }
 
@@ -123,7 +140,8 @@ body:has(.Root:not(.global-nav)) #SpicyLyricsPage .LyricsContainer .LyricsConten
   margin-top: 40cqh;
 }
 
-body:has(.Root:not(.global-nav)) #SpicyLyricsPage.Fullscreen.MinimalLyricsMode
+body:has(.Root:not(.global-nav))
+  #SpicyLyricsPage.Fullscreen.MinimalLyricsMode
   .LyricsContainer
   .LyricsContent
   .SpicyLyricsScrollContainer {

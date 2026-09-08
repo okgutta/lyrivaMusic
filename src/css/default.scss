@@ -1,4 +1,3 @@
-
 #SpicyLyricsPage .ContentBox .LyricsContainer .LyricsContent {
   .LyricsNotice {
     position: absolute;
@@ -40,22 +39,23 @@
 
         --hover-after-push: 3px;
 
-        transition: 800ms
-          linear(
-            0,
-            0.029 1.6%,
-            0.123 3.5%,
-            0.651 10.6%,
-            0.862 14.1%,
-            1.002 17.7%,
-            1.046 19.6%,
-            1.074 21.6%,
-            1.087 23.9%,
-            1.086 26.6%,
-            1.014 38.5%,
-            0.994 46.3%,
-            1
-          ),
+        transition:
+          800ms
+            linear(
+              0,
+              0.029 1.6%,
+              0.123 3.5%,
+              0.651 10.6%,
+              0.862 14.1%,
+              1.002 17.7%,
+              1.046 19.6%,
+              1.074 21.6%,
+              1.087 23.9%,
+              1.086 26.6%,
+              1.014 38.5%,
+              0.994 46.3%,
+              1
+            ),
           color 0.2s ease;
 
         margin: 0px;
@@ -118,7 +118,6 @@
 }
 
 .spicy-pip-wrapper #SpicyLyricsPage .ContentBox .LyricsContainer .LyricsContent {
-  
   .LyricsNotice {
     top: 8cqh;
     left: var(--LyricsLeftSidePadding);
@@ -137,16 +136,11 @@
   }
 }
 
-
 /* Take the elapsed time out of normal layout flow to avoid document-wide reflow
  * when the text updates every second. The progress bar is offset manually to
  * preserve spacing.
  */
-body:has(#SpicyLyricsPage):not(:has(
-  [id*="dribbblish"]
-)):not(
-  .sltm__ThemeMatch__textdt
-) {
+body:has(#SpicyLyricsPage):not(:has([id*="dribbblish"])):not(.sltm__ThemeMatch__textdt) {
   .playback-bar {
     position: relative;
   }
@@ -161,7 +155,7 @@ body:has(#SpicyLyricsPage):not(:has(
 }
 
 @property --sl_rsb-wrapperFade {
-  syntax: '<percentage>';
+  syntax: "<percentage>";
   inherits: false;
   initial-value: 0%;
 }
@@ -185,18 +179,45 @@ body:has(aside.spicy-dynamic-bg-in-this) {
   }
 
   /* npv topbar */
-  :not(.main-nowPlayingView-headerContainer:is(.BEeVmHj340c0PYHe, .EnViFhuIR5WVeEopJHu3, .fNXmHtlrj4UVWmhQrJ_5)) :is(.main-nowPlayingView-headerWrapper, .cSZJwcwYgJfwduUmXOOV, .BEeVmHj340c0PYHe, .EnViFhuIR5WVeEopJHu3, .fNXmHtlrj4UVWmhQrJ_5.yvZooOj0rpfRS__cAUCo, .mdMUqcSHFw1lZIcYEblu) {
-    transition: backdrop-filter .5s ease;
+  :not(
+      .main-nowPlayingView-headerContainer:is(
+        .BEeVmHj340c0PYHe,
+        .EnViFhuIR5WVeEopJHu3,
+        .fNXmHtlrj4UVWmhQrJ_5
+      )
+    )
+    :is(
+      .main-nowPlayingView-headerWrapper,
+      .cSZJwcwYgJfwduUmXOOV,
+      .BEeVmHj340c0PYHe,
+      .EnViFhuIR5WVeEopJHu3,
+      .fNXmHtlrj4UVWmhQrJ_5.yvZooOj0rpfRS__cAUCo,
+      .mdMUqcSHFw1lZIcYEblu
+    ) {
+    transition: backdrop-filter 0.5s ease;
     -webkit-box-shadow: none !important;
     box-shadow: none !important;
     backdrop-filter: blur(0) !important;
     isolation: isolate;
   }
 
-  :not(.main-nowPlayingView-headerContainer:is(.BEeVmHj340c0PYHe, .EnViFhuIR5WVeEopJHu3, .fNXmHtlrj4UVWmhQrJ_5.yvZooOj0rpfRS__cAUCo)) :is(.main-nowPlayingView-headerWrapper, .cSZJwcwYgJfwduUmXOOV, .BEeVmHj340c0PYHe, .EnViFhuIR5WVeEopJHu3, .fNXmHtlrj4UVWmhQrJ_5.yvZooOj0rpfRS__cAUCo)::before {
+  :not(
+      .main-nowPlayingView-headerContainer:is(
+        .BEeVmHj340c0PYHe,
+        .EnViFhuIR5WVeEopJHu3,
+        .fNXmHtlrj4UVWmhQrJ_5.yvZooOj0rpfRS__cAUCo
+      )
+    )
+    :is(
+      .main-nowPlayingView-headerWrapper,
+      .cSZJwcwYgJfwduUmXOOV,
+      .BEeVmHj340c0PYHe,
+      .EnViFhuIR5WVeEopJHu3,
+      .fNXmHtlrj4UVWmhQrJ_5.yvZooOj0rpfRS__cAUCo
+    )::before {
     content: "";
     position: absolute;
-   /*  mask-image: linear-gradient(to bottom, black 90%, transparent 100%); */
+    /*  mask-image: linear-gradient(to bottom, black 90%, transparent 100%); */
     backdrop-filter: blur(6px);
     inset: 0;
     width: 100%;
@@ -204,7 +225,10 @@ body:has(aside.spicy-dynamic-bg-in-this) {
   }
 
   :is(.main-nowPlayingView-headerContainer) {
-    transition: backdrop-filter .5s ease, margin-bottom .5s ease, padding-bottom .5s ease;
+    transition:
+      backdrop-filter 0.5s ease,
+      margin-bottom 0.5s ease,
+      padding-bottom 0.5s ease;
   }
 
   :is(.BEeVmHj340c0PYHe, .EnViFhuIR5WVeEopJHu3, .fNXmHtlrj4UVWmhQrJ_5.yvZooOj0rpfRS__cAUCo) {
@@ -222,17 +246,29 @@ body:has(aside.spicy-dynamic-bg-in-this) {
     top: 0;
     margin-bottom: 0;
     mask-image: linear-gradient(to bottom, transparent 0%, black var(--sl_rsb-wrapperFade));
-    transition: top .5s ease, margin-bottom .5s ease, --sl_rsb-wrapperFade .5s ease;
+    transition:
+      top 0.5s ease,
+      margin-bottom 0.5s ease,
+      --sl_rsb-wrapperFade 0.5s ease;
   }
 
-  .NowPlayingView > div:has(.pHNOePN5RT09utW9, .niJOWstqVyfckHcXQxP1, .vDev2BqBHloweL24GNHK) :is(.main-nowPlayingView-mainContainer, .cZCuJDjrGA2QMXja_Sua) {
+  .NowPlayingView
+    > div:has(.pHNOePN5RT09utW9, .niJOWstqVyfckHcXQxP1, .vDev2BqBHloweL24GNHK)
+    :is(.main-nowPlayingView-mainContainer, .cZCuJDjrGA2QMXja_Sua) {
     --sl_rsb-wrapperFade: 20%;
     --push: 4.2rem;
     top: var(--push);
     margin-bottom: var(--push);
   }
 
-  .NowPlayingView > div:has(.BEeVmHj340c0PYHe, .EnViFhuIR5WVeEopJHu3, .fNXmHtlrj4UVWmhQrJ_5.yvZooOj0rpfRS__cAUCo, .mdMUqcSHFw1lZIcYEblu) :is(.main-nowPlayingView-mainContainer, .cZCuJDjrGA2QMXja_Sua) {
+  .NowPlayingView
+    > div:has(
+      .BEeVmHj340c0PYHe,
+      .EnViFhuIR5WVeEopJHu3,
+      .fNXmHtlrj4UVWmhQrJ_5.yvZooOj0rpfRS__cAUCo,
+      .mdMUqcSHFw1lZIcYEblu
+    )
+    :is(.main-nowPlayingView-mainContainer, .cZCuJDjrGA2QMXja_Sua) {
     --sl_rsb-wrapperFade: 10%;
   }
 }

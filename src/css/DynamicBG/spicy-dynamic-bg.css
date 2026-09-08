@@ -37,7 +37,7 @@ aside .spicy-dynamic-bg {
 }
 
 @property --sl_videocanvas_mask-stop {
-  syntax: '<percentage>';
+  syntax: "<percentage>";
   inherits: false;
   initial-value: 80%;
 }
@@ -45,13 +45,29 @@ aside .spicy-dynamic-bg {
 aside video {
   --sl_videocanvas_mask-stop: 25%;
   filter: brightness(0.65);
-  opacity: .95;
-  mask-image: linear-gradient(to bottom, transparent -5%, black 15%, black var(--sl_videocanvas_mask-stop), transparent 100%);
-  transition: --sl_videocanvas_mask-stop 1s cubic-bezier(0,0,0,1), filter 0.2s linear;
+  opacity: 0.95;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent -5%,
+    black 15%,
+    black var(--sl_videocanvas_mask-stop),
+    transparent 100%
+  );
+  transition:
+    --sl_videocanvas_mask-stop 1s cubic-bezier(0, 0, 0, 1),
+    filter 0.2s linear;
 }
 
-aside .main-nowPlayingView-coverArtContainer:not(.XixZ4ftG53tYcM4KohE1, .yiy_EezkGycfPvS3, .pUIBQ9cykHKYx2A2ZIPA) video,
-.main-nowPlayingView-nowPlayingGrid > div:has(video):not(.yiy_EezkGycfPvS3, .XixZ4ftG53tYcM4KohE1, .pUIBQ9cykHKYx2A2ZIPA) video {
+aside
+  .main-nowPlayingView-coverArtContainer:not(
+    .XixZ4ftG53tYcM4KohE1,
+    .yiy_EezkGycfPvS3,
+    .pUIBQ9cykHKYx2A2ZIPA
+  )
+  video,
+.main-nowPlayingView-nowPlayingGrid
+  > div:has(video):not(.yiy_EezkGycfPvS3, .XixZ4ftG53tYcM4KohE1, .pUIBQ9cykHKYx2A2ZIPA)
+  video {
   --sl_videocanvas_mask-stop: 80%;
 }
 
@@ -73,8 +89,12 @@ div.UUydeXMsXVZofB0YAOgm:has(.main-trackInfo-container)::before,
 div.main-nowPlayingView-contextItemInfo:has(.main-trackInfo-container)::before,
 div.UUydeXMsXVZofB0YAOgm:has(.main-trackInfo-container)::after,
 div.main-nowPlayingView-contextItemInfo:has(.main-trackInfo-container)::after,
-:is(.main-nowPlayingView-nowPlayingWidget, .NowPlayingView, aside) div:has(> .main-nowPlayingView-coverArtVisualEnhancement) :not(.main-nowPlayingView-coverArtVisualEnhancement):has(video)::before,
-:is(.main-nowPlayingView-nowPlayingWidget, .NowPlayingView, aside) div:has(> .main-nowPlayingView-coverArtVisualEnhancement) :not(.main-nowPlayingView-coverArtVisualEnhancement):has(video)::after {
+:is(.main-nowPlayingView-nowPlayingWidget, .NowPlayingView, aside)
+  div:has(> .main-nowPlayingView-coverArtVisualEnhancement)
+  :not(.main-nowPlayingView-coverArtVisualEnhancement):has(video)::before,
+:is(.main-nowPlayingView-nowPlayingWidget, .NowPlayingView, aside)
+  div:has(> .main-nowPlayingView-coverArtVisualEnhancement)
+  :not(.main-nowPlayingView-coverArtVisualEnhancement):has(video)::after {
   display: none !important;
 }
 
@@ -90,8 +110,7 @@ aside:has(.spicy-dynamic-bg) .iHa_q9pq4un3VNRQgwTx {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  filter: brightness(0.55) contrast(1.05) saturate(1.7)
-    blur(var(--StaticBackgroundBlur, 0px));
+  filter: brightness(0.55) contrast(1.05) saturate(1.7) blur(var(--StaticBackgroundBlur, 0px));
   /* The 1.25 upscale crops the transparent fringe blur samples in at the edges. */
   scale: 1.25;
   transform: translateX(0);
@@ -124,7 +143,8 @@ aside:has(.spicy-dynamic-bg) .iHa_q9pq4un3VNRQgwTx {
 }
 
 /* Hide sidebar background when in fullscreen lyrics mode */
-body:has(#SpicyLyricsPage.Fullscreen) .Root__right-sidebar
+body:has(#SpicyLyricsPage.Fullscreen)
+  .Root__right-sidebar
   aside:is(.NowPlayingView, .spicy-dynamic-bg-in-this)
   .spicy-dynamic-bg {
   display: none;
@@ -190,7 +210,7 @@ body:has(#SpicyLyricsPage.Fullscreen) .Root__right-sidebar
 
 .NowPlayingView .main-nowPlayingView-headerCloseButton {
   color: var(--spice-text);
-  opacity: .8 !important;
+  opacity: 0.8 !important;
 }
 
 .NowPlayingView .main-nowPlayingView-headerCloseButton:hover,

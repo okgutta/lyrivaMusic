@@ -8,8 +8,7 @@
 import Logger from "../../Logger.ts";
 import { $geniusApiToken } from "../../stores.ts";
 import { splitArtists, type Candidate, type TargetTrack, type LyricsPayload } from "../matcher.ts";
-import { type LyricProvider, MIN_LYRIC_LINES } from "./types.ts";
-import type { LyraLogger } from "../../LyraLogger.ts";
+import { type LyricProvider, type LyraLogger, MIN_LYRIC_LINES } from "./types.ts";
 
 const geniusLogger = new Logger("Genius Provider");
 

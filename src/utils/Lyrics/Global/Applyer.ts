@@ -23,14 +23,7 @@ import type { LyricsPayload } from "../matcher.ts";
  */
 export type LyricsData = LyricsPayload;
 
-let currentAbortController: AbortController | null = null;
-
-export const cleanupApplyLyricsAbortController = () => {
-  if (currentAbortController) {
-    currentAbortController.abort();
-    currentAbortController = null;
-  }
-};
+let lastAppliedResult: [object | string, number] | null = null;
 
 /**
  * Apply lyrics based on their type
@@ -42,8 +35,20 @@ export default async function ApplyLyrics(
   if (!PageContainer) return;
   setBlurringLastLine(null);
   if (!lyricsContent) return;
-
-  cleanupApplyLyricsAbortController();
+  const [descriptor] = lyricsContent;
+  if (typeof descriptor !== "string") {
+    const currentUri = SpotifyPlayer.GetUri();
+    const lyricsUri = (descriptor as LyricsData).uri;
+    if (lyricsUri && currentUri && lyricsUri !== currentUri) return;
+  }
+  // Cache warming and a page opening can attach two callbacks to the same
+  // in-flight result. Coalesce that same tuple within the current microtask so
+  // the complete DOM tree is not destroyed and rebuilt twice.
+  if (lastAppliedResult === lyricsContent) return;
+  lastAppliedResult = lyricsContent;
+  queueMicrotask(() => {
+    if (lastAppliedResult === lyricsContent) lastAppliedResult = null;
+  });
 
   EmitNotApplyed();
 
@@ -54,8 +59,6 @@ export default async function ApplyLyrics(
   ClearLyricsPageContainer();
 
   CleanUpIsByCommunity();
-
-  const [descriptor, _status] = lyricsContent;
 
   let noticeContent: string | null = null;
 
@@ -120,10 +123,6 @@ export default async function ApplyLyrics(
 
     if (!lyricsContainer) return;
 
-    if (!currentAbortController || currentAbortController.signal.aborted) {
-      currentAbortController = new AbortController();
-    }
-
     const currentNoticeElement = document.createElement("div");
     currentNoticeElement.classList.add("LyricsNotice");
     lyricsContainer.appendChild(currentNoticeElement);
@@ -148,11 +147,6 @@ export default async function ApplyLyrics(
   }
 
   const lyrics = descriptor as LyricsData;
-  const currentUri = SpotifyPlayer.GetUri();
-  if (lyrics?.uri && currentUri && lyrics.uri !== currentUri) {
-    return;
-  }
-
   const romanize = isRomanized;
 
   if (lyrics.Type === "Syllable") {

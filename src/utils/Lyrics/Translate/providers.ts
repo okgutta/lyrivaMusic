@@ -110,9 +110,7 @@ function languageName(targetLang: string): string {
 // OpenAI 兼容客户端（DeepSeek / ChatGPT / 自定义 API 共用）
 // ============================================================
 
-export type ChatProviderId = "deepseek" | "openai" | "custom";
-
-export interface ChatProviderConfig {
+interface ChatProviderConfig {
   label: string;
   baseUrl: string;
   apiKey: string;
@@ -120,7 +118,7 @@ export interface ChatProviderConfig {
 }
 
 /** 当前所选 LLM 后端的连接配置；未配置完整时返回 null */
-export function getChatProviderConfig(): ChatProviderConfig | null {
+function getChatProviderConfig(): ChatProviderConfig | null {
   switch ($translationProvider.get()) {
     case "deepseek": {
       const apiKey = $deepSeekApiKey.get()?.trim() ?? "";
@@ -552,7 +550,7 @@ export async function translateLines(
 }
 
 /** 所选服务配置不完整的可识别错误（index.ts 按此提示用户） */
-export class TranslationConfigError extends Error {
+class TranslationConfigError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "TranslationConfigError";

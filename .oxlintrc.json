@@ -14,14 +14,7 @@
     "public-storage/**",
     ".tmp/**",
 
-    "src/types/pako.d.ts",
-    "src/types/spicetify.d.ts",
-
-    "src/utils/SpicyHasher.ts",
-
-    "src/utils/Lyrics/Aromanize.ts",
-    "src/utils/Lyrics/Kuromoji.js",
-    "src/utils/Lyrics/GreekRomanization.js"
+    "src/types/spicetify.d.ts"
   ],
   "rules": {
     "no-console": "off",

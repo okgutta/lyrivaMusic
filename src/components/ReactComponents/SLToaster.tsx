@@ -11,9 +11,7 @@ export default function SLToaster() {
   const isGlobalNav = useStore($isGlobalNav);
 
   useEffect(() => {
-    const targetElement = document.querySelector<HTMLElement>(
-      ".Root__now-playing-bar",
-    );
+    const targetElement = document.querySelector<HTMLElement>(".Root__now-playing-bar");
 
     if (!targetElement) {
       toasterLogger.warn("Could not find '.Root__now-playing-bar' in the DOM");
@@ -37,7 +35,9 @@ export default function SLToaster() {
   return (
     <Toaster
       position="bottom-center"
-      offset={{ bottom: `var(--sltoaster-bottom-padding, ${String(nowPlayingBarHeight + 16 + (isGlobalNav ? 0 : 8))}px)` }}
+      offset={{
+        bottom: `var(--sltoaster-bottom-padding, ${String(nowPlayingBarHeight + 16 + (isGlobalNav ? 0 : 8))}px)`,
+      }}
       theme="dark"
       toastOptions={{
         style: {

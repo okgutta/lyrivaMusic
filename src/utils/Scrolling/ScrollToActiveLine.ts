@@ -1,5 +1,4 @@
 import { $currentLyricsType, $lyricsContainerExists } from "../../utils/stores.ts";
-import Global from "../../components/Global/Global.ts";
 import { SpotifyPlayer } from "../../components/Global/SpotifyPlayer.ts";
 import { PageContainer } from "../../components/Pages/PageView.ts";
 import { IsCompactMode } from "../../components/Utils/CompactMode.ts";
@@ -226,18 +225,6 @@ const GetScrollType = (): "Center" | "Top" => {
   return IsCompactMode() ? "Top" : "Center";
 };
 
-const policyEventPreset = "policy:";
-
-let allowForceScrolling = true;
-
-export const SetForceScrollingPolicy = (value: boolean) => {
-  allowForceScrolling = value; // true = allow force scrolling, false = disallow force scrolling
-  Global.Event.evoke(`${policyEventPreset}force-scrolling`, value);
-};
-export const GetForceScrollingPolicy = () => {
-  return allowForceScrolling;
-};
-
 export function ScrollToActiveLine(ScrollSimplebar: any) {
   if ($currentLyricsType.get() === "Static" || $currentLyricsType.get() === "None") return;
   if (!$lyricsContainerExists.get()) return;
@@ -268,7 +255,6 @@ export function ScrollToActiveLine(ScrollSimplebar: any) {
     (!SpotifyPlayer.IsPlaying && lastPosition !== Position) ||
     (lastPosition !== 0 && wasDrasticPositionChange(lastPosition ?? 0, Position))
   ) {
-    if (!allowForceScrolling) return;
     const container = ScrollSimplebar?.getScrollElement() as HTMLElement;
     if (!container) return;
     isUserScrolling = false;
@@ -296,7 +282,6 @@ export function ScrollToActiveLine(ScrollSimplebar: any) {
   lastPosition = Position;
 
   if (isSmoothForceScrollQueued) {
-    if (!allowForceScrolling) return;
     const container = ScrollSimplebar?.getScrollElement() as HTMLElement;
     if (!container) return;
     isUserScrolling = false;

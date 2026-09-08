@@ -164,25 +164,6 @@ function isBadTranslation(source: string, translated: string, targetLang: string
 
 // ─── 读写 ─────────────────────────────────────────────────────────────────────
 
-export function getCachedTranslation(sourceLine: string, targetLang: string): string | null {
-  if (!sourceLine) return null;
-  const key = lineKey(targetLang, sourceLine);
-  const cache = readCache();
-  const entry = cache[key];
-  if (!entry || typeof entry.t !== "string" || !entry.t) return null;
-  if (typeof entry.ts !== "number" || Date.now() - entry.ts > CACHE_TTL) {
-    delete cache[key];
-    saveCache(cache);
-    return null;
-  }
-  if (isBadTranslation(sourceLine, entry.t, targetLang)) {
-    delete cache[key];
-    saveCache(cache);
-    return null;
-  }
-  return entry.t;
-}
-
 export function setCachedTranslation(
   sourceLine: string,
   targetLang: string,
@@ -257,24 +238,4 @@ export function getCachedFromSnapshot(
   if (typeof entry.ts !== "number" || Date.now() - entry.ts > CACHE_TTL) return null;
   if (isBadTranslation(sourceLine, entry.t, targetLang)) return null;
   return entry.t;
-}
-
-/** 行缓存统计（供设置 UI） */
-export function getLineCacheStats(): {
-  entries: number;
-  sizeBytes: number;
-  oldestTimestamp: number | null;
-} {
-  const cache = readCache();
-  if (pruneCache(cache)) saveCache(cache);
-  const keys = Object.keys(cache);
-  let sizeBytes = 0;
-  let oldestTimestamp: number | null = null;
-  for (const key of keys) {
-    const entry = cache[key];
-    sizeBytes += key.length * 2 + (entry?.t?.length ?? 0) * 2;
-    if (entry && (oldestTimestamp === null || entry.ts < oldestTimestamp))
-      oldestTimestamp = entry.ts;
-  }
-  return { entries: keys.length, sizeBytes, oldestTimestamp };
 }

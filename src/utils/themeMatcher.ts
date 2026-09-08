@@ -3,14 +3,12 @@
 function onMarketplaceUserCssDetected(userCssText: string | null) {
   if (
     userCssText?.includes(
-      `*:not([style*="lyric" i] *, [class*="lyric" i], .main-entityHeader-title)`,
+      `*:not([style*="lyric" i] *, [class*="lyric" i], .main-entityHeader-title)`
     ) ||
     userCssText?.includes(
-      `---------------\nPLAYBACK BAR\n---------------\n*/\n/* playback progress bar moves smoothly */\n.x-progressBar-fillColor`,
+      `---------------\nPLAYBACK BAR\n---------------\n*/\n/* playback progress bar moves smoothly */\n.x-progressBar-fillColor`
     ) ||
-    userCssText?.includes(
-      "/* check out a cool project: https://github.com/Rigellute/spotify-tui",
-    )
+    userCssText?.includes("/* check out a cool project: https://github.com/Rigellute/spotify-tui")
   ) {
     document.body.classList.add("sltm__ThemeMatch__textdt");
     return;
@@ -25,8 +23,7 @@ export function watchMarketplaceUserCss(): () => void {
   let cssObserver: MutationObserver | null = null;
   let currentEl: Element | null = null;
 
-  const emit = (userCssText: string | null) =>
-    onMarketplaceUserCssDetected(userCssText);
+  const emit = (userCssText: string | null) => onMarketplaceUserCssDetected(userCssText);
 
   const getMarketplaceUserCssEl = () =>
     document.body?.querySelector(":scope > .marketplaceUserCSS") ?? null;

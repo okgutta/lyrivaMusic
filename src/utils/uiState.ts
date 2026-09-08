@@ -37,7 +37,6 @@ export const $nowBarSide = persistAtom<"left" | "right">("nowBarSide", "left");
 export const $forceCompactMode = persistAtom<boolean>("forceCompactMode", false);
 export const $romanization = persistAtom<boolean>("romanization", false);
 export const $fromVersion = persistAtom<string>("fromVersion", "");
-export const $lastFetchedUri = persistAtom<string | null>("lastFetchedUri", null);
 export const $previousVersion = persistAtom<string>("previousVersion", "");
 export const $npvLyricsOpen = persistAtom<boolean>("npvLyricsOpen", true);
 export const $npvLyricsExpanded = persistAtom<boolean>("npvLyricsExpanded", false);

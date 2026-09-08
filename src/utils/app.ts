@@ -3,7 +3,7 @@ function isDev() {
 }
 
 const App = {
-  isDev
-}
+  isDev,
+};
 
 export default App;

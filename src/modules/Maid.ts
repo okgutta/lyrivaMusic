@@ -19,10 +19,7 @@ function uuidv4(): string {
 function cleanItem(item: MaidItem): void {
   if (typeof item === "function") {
     item();
-  } else if (
-    item instanceof MutationObserver ||
-    item instanceof ResizeObserver
-  ) {
+  } else if (item instanceof MutationObserver || item instanceof ResizeObserver) {
     item.disconnect();
   } else if (item instanceof Element) {
     item.remove();

@@ -169,6 +169,24 @@ function presentLyrics(lyricsData: LyricsPayload, uri: string, gen?: number): vo
 const finalizedModels = new WeakSet<object>();
 const backgroundFinalizations = new Map<string, Promise<void>>();
 
+async function persistLyricsModel(
+  model: LyricsPayload,
+  trackId: string,
+  uri: string
+): Promise<void> {
+  if (!LyricsStore) return;
+  try {
+    const storeEntry: LyricsCacheEntry = {
+      model,
+      uri,
+      matchInfo: model.matchInfo as LyricsCacheEntry["matchInfo"],
+    };
+    await LyricsStore.SetItem(trackId, storeEntry);
+  } catch (error) {
+    lyricsCacheLogger.error("Error saving lyrics to cache", error);
+  }
+}
+
 async function finalizeLyricsInBackground(
   model: LyricsPayload,
   trackId: string,
@@ -185,6 +203,10 @@ async function finalizeLyricsInBackground(
       setTimeout(resolve, 0);
     }
   });
+
+  // Persist the valid raw model before optional language/romanization work. A
+  // failed enhancement must not force the next play to repeat the network wait.
+  await persistLyricsModel(model, trackId, uri);
   if (!isActiveRequest(gen, uri, signal)) return;
 
   let appliedRomanization = false;
@@ -206,18 +228,8 @@ async function finalizeLyricsInBackground(
     Global.Event.evoke("lyrics:enriched", { uri, lyrics: model });
   }
 
-  if (LyricsStore) {
-    try {
-      const storeEntry: LyricsCacheEntry = {
-        model,
-        uri,
-        matchInfo: model.matchInfo as LyricsCacheEntry["matchInfo"],
-      };
-      await LyricsStore.SetItem(trackId, storeEntry);
-    } catch (error) {
-      lyricsCacheLogger.error("Error saving lyrics to cache", error);
-    }
-  }
+  // Refresh the entry with any successfully generated transliterations.
+  await persistLyricsModel(model, trackId, uri);
 }
 
 function scheduleLyricsFinalization(
@@ -463,8 +475,8 @@ async function fetchLyricsInner(
   const fallbackHit = fallback?.kind === "hit" ? fallback : null;
   if (result.kind === "ok" || fallbackHit) {
     const model = result.kind === "ok" ? result.model : fallbackHit!.model;
-    $currentLyricsData.set(JSON.stringify(model));
     if (!isActiveRequest(gen, uri, signal)) return null;
+    $currentLyricsData.set(JSON.stringify(model));
     presentLyrics(model, uri, gen);
     scheduleLyricsFinalization(model, trackId, uri, gen, signal);
     return [{ ...model, fromCache: false }, 200];
@@ -518,57 +530,79 @@ type GeniusFallbackResult =
   | { kind: "miss" }
   | { kind: "unavailable" };
 
+const GENIUS_FALLBACK_TIMEOUT_MS = 12_000;
+const GENIUS_MAX_FETCH_CANDIDATES = 2;
+
 async function tryGeniusFallback(
   target: TargetTrack,
   signal?: AbortSignal
 ): Promise<GeniusFallbackResult> {
-  let cands: Candidate[] = [];
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, GENIUS_FALLBACK_TIMEOUT_MS);
+  const onAbort = () => controller.abort();
+  if (signal?.aborted) {
+    controller.abort();
+  } else {
+    signal?.addEventListener("abort", onAbort, { once: true });
+  }
+
   try {
-    cands = await geniusProvider.search(target, signal);
-  } catch (err) {
-    if (signal?.aborted) throw err;
-    lyricsCacheLogger.debug("Genius 兜底搜索失败", err);
-    return { kind: "unavailable" };
-  }
-  if (signal?.aborted) return { kind: "unavailable" };
-  if (!cands.length) return { kind: "miss" };
-
-  const ranked = cands
-    .map((cand) => ({ cand, match: matchCandidate(target, cand) }))
-    .sort((a, b) => rankMatch(b.match) - rankMatch(a.match));
-
-  for (const candidate of ranked) {
-    if (
-      candidate.match.rejected ||
-      (candidate.match.level !== "HIGH" && candidate.match.level !== "GOOD")
-    ) {
-      continue;
-    }
-    let model: LyricsPayload | null;
+    let cands: Candidate[] = [];
     try {
-      model = await geniusProvider.fetchLyrics(candidate.cand, signal);
-    } catch (error) {
-      if (signal?.aborted) throw error;
-      lyricsCacheLogger.debug("Genius 兜底候选抓取失败", error);
-      continue;
+      cands = await geniusProvider.search(target, controller.signal);
+    } catch (err) {
+      if (signal?.aborted) throw err;
+      if (timedOut) {
+        lyricsCacheLogger.debug("Genius 兜底超过总时限");
+      } else {
+        lyricsCacheLogger.debug("Genius 兜底搜索失败", err);
+      }
+      return { kind: "unavailable" };
     }
-    if (signal?.aborted) return { kind: "unavailable" };
-    if (!model) continue;
-    const matchInfo: MatchInfo = {
-      level: candidate.match.level,
-      confidence: candidate.match.confidence,
-      targetTitle: target.title,
-      targetArtists: target.artists,
-      candidateTitle: candidate.cand.title,
-      candidateArtists: candidate.cand.artists,
-      source: "genius",
-      savedAt: Date.now(),
-    };
-    model.uri = target.uri;
-    model.matchInfo = matchInfo;
-    return { kind: "hit", model, matchInfo };
+    if (controller.signal.aborted) return { kind: "unavailable" };
+    if (!cands.length) return { kind: "miss" };
+
+    const ranked = cands
+      .map((cand) => ({ cand, match: matchCandidate(target, cand) }))
+      .filter(({ match }) => !match.rejected && (match.level === "HIGH" || match.level === "GOOD"))
+      .sort((a, b) => rankMatch(b.match) - rankMatch(a.match))
+      .slice(0, GENIUS_MAX_FETCH_CANDIDATES);
+
+    for (const candidate of ranked) {
+      let model: LyricsPayload | null;
+      try {
+        model = await geniusProvider.fetchLyrics(candidate.cand, controller.signal);
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        if (timedOut) return { kind: "unavailable" };
+        lyricsCacheLogger.debug("Genius 兜底候选抓取失败", error);
+        continue;
+      }
+      if (controller.signal.aborted) return { kind: "unavailable" };
+      if (!model) continue;
+      const matchInfo: MatchInfo = {
+        level: candidate.match.level,
+        confidence: candidate.match.confidence,
+        targetTitle: target.title,
+        targetArtists: target.artists,
+        candidateTitle: candidate.cand.title,
+        candidateArtists: candidate.cand.artists,
+        source: "genius",
+        savedAt: Date.now(),
+      };
+      model.uri = target.uri;
+      model.matchInfo = matchInfo;
+      return { kind: "hit", model, matchInfo };
+    }
+    return { kind: "miss" };
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener("abort", onAbort);
   }
-  return { kind: "miss" };
 }
 
 let ContainerShowLoaderTimeout: ReturnType<typeof setTimeout> | null = null;

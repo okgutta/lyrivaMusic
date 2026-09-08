@@ -39,19 +39,10 @@ export function normalizeLang(code?: string | null): string {
   const base = v.split("-")[0];
 
   const zhVariant = (raw: string): string => {
-    if (
-      raw.includes("tw") ||
-      raw.includes("hk") ||
-      raw.includes("mo") ||
-      raw.includes("hant")
-    ) {
+    if (raw.includes("tw") || raw.includes("hk") || raw.includes("mo") || raw.includes("hant")) {
       return "zh-hant";
     }
-    if (
-      raw.includes("hans") ||
-      raw.includes("cn") ||
-      raw.includes("sg")
-    ) {
+    if (raw.includes("hans") || raw.includes("cn") || raw.includes("sg")) {
       return "zh-hans";
     }
     return "zh";
