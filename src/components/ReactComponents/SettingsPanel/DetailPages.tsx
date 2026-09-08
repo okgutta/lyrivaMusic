@@ -24,10 +24,12 @@ function DetailShell({
   title,
   onBack,
   children,
+  actions,
 }: {
   title: string;
   onBack: () => void;
   children: React.ReactNode;
+  actions?: React.ReactNode;
 }) {
   return (
     <div className="sl-sp-detail">
@@ -53,7 +55,32 @@ function DetailShell({
       </div>
       <h2 className="sl-sp-detail-title">{title}</h2>
       <div className="sl-sp-detail-body">{children}</div>
+      {actions && <div className="sl-sp-detail-footer">{actions}</div>}
     </div>
+  );
+}
+
+function DetailActionBar({
+  dirty,
+  configured,
+  children,
+}: {
+  dirty: boolean;
+  configured: boolean;
+  children: React.ReactNode;
+}) {
+  const status = dirty ? "有未保存的更改" : configured ? "已保存" : "尚未配置";
+  return (
+    <>
+      <span
+        className={`sl-sp-save-status${dirty ? " sl-sp-save-status--dirty" : ""}`}
+        role="status"
+        aria-live="polite"
+      >
+        {status}
+      </span>
+      <div className="sl-sp-inline-controls sl-sp-detail-actions">{children}</div>
+    </>
   );
 }
 
@@ -69,9 +96,42 @@ function notify(message: string): void {
 export function DetailGeniusToken({ onBack }: { onBack: () => void }) {
   const geniusApiToken = useStore($geniusApiToken);
   const [draft, setDraft] = useState(geniusApiToken);
+  const normalizedDraft = draft.trim();
+  const dirty = normalizedDraft !== geniusApiToken;
 
   return (
-    <DetailShell title="Genius API Token" onBack={onBack}>
+    <DetailShell
+      title="Genius API Token"
+      onBack={onBack}
+      actions={
+        <DetailActionBar dirty={dirty} configured={Boolean(geniusApiToken)}>
+          <button
+            type="button"
+            className="sl-sp-btn sl-sp-btn--primary"
+            disabled={!normalizedDraft || !dirty}
+            onClick={() => {
+              $geniusApiToken.set(normalizedDraft);
+              setDraft(normalizedDraft);
+              notify("已保存 Genius API Token");
+            }}
+          >
+            保存
+          </button>
+          <button
+            type="button"
+            className="sl-sp-btn"
+            disabled={!geniusApiToken && !draft}
+            onClick={() => {
+              $geniusApiToken.set("");
+              setDraft("");
+              notify("已清除 Genius API Token");
+            }}
+          >
+            清除 Token
+          </button>
+        </DetailActionBar>
+      }
+    >
       <Section>
         <Row
           label="Token"
@@ -84,35 +144,6 @@ export function DetailGeniusToken({ onBack }: { onBack: () => void }) {
             placeholder="Genius Access Token"
             onChange={setDraft}
           />
-        </Row>
-      </Section>
-      <Section>
-        <Row label="操作">
-          <div className="sl-sp-inline-controls sl-sp-detail-actions">
-            <button
-              type="button"
-              className="sl-sp-btn sl-sp-btn--primary"
-              disabled={!draft.trim()}
-              onClick={() => {
-                $geniusApiToken.set(draft.trim());
-                notify("已保存 Genius API Token");
-              }}
-            >
-              保存
-            </button>
-            <button
-              type="button"
-              className="sl-sp-btn"
-              disabled={!geniusApiToken}
-              onClick={() => {
-                $geniusApiToken.set("");
-                setDraft("");
-                notify("已清除 Genius API Token");
-              }}
-            >
-              清除 Token
-            </button>
-          </div>
         </Row>
       </Section>
     </DetailShell>
@@ -169,6 +200,7 @@ export function DetailTranslationLanguage({ onBack }: { onBack: () => void }) {
               key={lang}
               type="button"
               className={`sl-sp-choice-row${active ? " sl-sp-choice-row--active" : ""}`}
+              aria-pressed={active}
               onClick={() => $translationTargetLang.set(lang)}
             >
               <span className="sl-sp-choice-label">{LANG_LABELS[lang] ?? lang}</span>
@@ -201,41 +233,45 @@ export function DetailTranslationLanguage({ onBack }: { onBack: () => void }) {
 export function DetailDeepSeekKey({ onBack }: { onBack: () => void }) {
   const deepSeekApiKey = useStore($deepSeekApiKey);
   const [draft, setDraft] = useState(deepSeekApiKey);
+  const normalizedDraft = draft.trim();
+  const dirty = normalizedDraft !== deepSeekApiKey;
 
   return (
-    <DetailShell title="DeepSeek API Key" onBack={onBack}>
+    <DetailShell
+      title="DeepSeek API Key"
+      onBack={onBack}
+      actions={
+        <DetailActionBar dirty={dirty} configured={Boolean(deepSeekApiKey)}>
+          <button
+            type="button"
+            className="sl-sp-btn sl-sp-btn--primary"
+            disabled={!normalizedDraft || !dirty}
+            onClick={() => {
+              $deepSeekApiKey.set(normalizedDraft);
+              setDraft(normalizedDraft);
+              notify("已保存 DeepSeek API Key");
+            }}
+          >
+            保存
+          </button>
+          <button
+            type="button"
+            className="sl-sp-btn"
+            disabled={!deepSeekApiKey && !draft}
+            onClick={() => {
+              $deepSeekApiKey.set("");
+              setDraft("");
+              notify("已清除 DeepSeek API Key");
+            }}
+          >
+            清除 API Key
+          </button>
+        </DetailActionBar>
+      }
+    >
       <Section>
         <Row label="API Key" description="在 platform.deepseek.com 创建 API Key" stacked>
           <Input type="password" value={draft} placeholder="sk-..." onChange={setDraft} />
-        </Row>
-      </Section>
-      <Section>
-        <Row label="操作">
-          <div className="sl-sp-inline-controls sl-sp-detail-actions">
-            <button
-              type="button"
-              className="sl-sp-btn sl-sp-btn--primary"
-              disabled={!draft.trim()}
-              onClick={() => {
-                $deepSeekApiKey.set(draft.trim());
-                notify("已保存 DeepSeek API Key");
-              }}
-            >
-              保存
-            </button>
-            <button
-              type="button"
-              className="sl-sp-btn"
-              disabled={!deepSeekApiKey}
-              onClick={() => {
-                $deepSeekApiKey.set("");
-                setDraft("");
-                notify("已清除 DeepSeek API Key");
-              }}
-            >
-              清除 API Key
-            </button>
-          </div>
         </Row>
       </Section>
     </DetailShell>
@@ -370,41 +406,45 @@ export function DetailTranslationModel({ onBack }: { onBack: () => void }) {
 export function DetailOpenAIConfig({ onBack }: { onBack: () => void }) {
   const openaiApiKey = useStore($openaiApiKey);
   const [draft, setDraft] = useState(openaiApiKey);
+  const normalizedDraft = draft.trim();
+  const dirty = normalizedDraft !== openaiApiKey;
 
   return (
-    <DetailShell title="ChatGPT API Key" onBack={onBack}>
+    <DetailShell
+      title="ChatGPT API Key"
+      onBack={onBack}
+      actions={
+        <DetailActionBar dirty={dirty} configured={Boolean(openaiApiKey)}>
+          <button
+            type="button"
+            className="sl-sp-btn sl-sp-btn--primary"
+            disabled={!normalizedDraft || !dirty}
+            onClick={() => {
+              $openaiApiKey.set(normalizedDraft);
+              setDraft(normalizedDraft);
+              notify("已保存 ChatGPT API Key");
+            }}
+          >
+            保存
+          </button>
+          <button
+            type="button"
+            className="sl-sp-btn"
+            disabled={!openaiApiKey && !draft}
+            onClick={() => {
+              $openaiApiKey.set("");
+              setDraft("");
+              notify("已清除 ChatGPT API Key");
+            }}
+          >
+            清除 API Key
+          </button>
+        </DetailActionBar>
+      }
+    >
       <Section>
         <Row label="API Key" description="在 platform.openai.com/api-keys 创建 API Key" stacked>
           <Input type="password" value={draft} placeholder="sk-..." onChange={setDraft} />
-        </Row>
-      </Section>
-      <Section>
-        <Row label="操作">
-          <div className="sl-sp-inline-controls sl-sp-detail-actions">
-            <button
-              type="button"
-              className="sl-sp-btn sl-sp-btn--primary"
-              disabled={!draft.trim()}
-              onClick={() => {
-                $openaiApiKey.set(draft.trim());
-                notify("已保存 ChatGPT API Key");
-              }}
-            >
-              保存
-            </button>
-            <button
-              type="button"
-              className="sl-sp-btn"
-              disabled={!openaiApiKey}
-              onClick={() => {
-                $openaiApiKey.set("");
-                setDraft("");
-                notify("已清除 ChatGPT API Key");
-              }}
-            >
-              清除 API Key
-            </button>
-          </div>
         </Row>
       </Section>
     </DetailShell>
@@ -418,9 +458,57 @@ export function DetailCustomConfig({ onBack }: { onBack: () => void }) {
   const [draftUrl, setDraftUrl] = useState(baseUrl);
   const [draftKey, setDraftKey] = useState(apiKey);
   const [draftModel, setDraftModel] = useState(model);
+  const normalizedKey = draftKey.trim();
+  const normalizedModel = draftModel.trim();
+  const dirty =
+    draftUrl.trim() !== baseUrl || normalizedKey !== apiKey || normalizedModel !== model;
+  const canSave = Boolean(draftUrl.trim() && normalizedKey && normalizedModel && dirty);
+  const configured = Boolean(baseUrl || apiKey || model);
 
   return (
-    <DetailShell title="自定义 API" onBack={onBack}>
+    <DetailShell
+      title="自定义 API"
+      onBack={onBack}
+      actions={
+        <DetailActionBar dirty={dirty} configured={configured}>
+          <button
+            type="button"
+            className="sl-sp-btn sl-sp-btn--primary"
+            disabled={!canSave}
+            onClick={() => {
+              const normalizedUrl = normalizeApiBaseUrl(draftUrl);
+              if (!normalizedUrl) {
+                notify("API 地址必须使用 HTTPS（仅 localhost 可使用 HTTP）");
+                return;
+              }
+              $customApiBaseUrl.set(normalizedUrl);
+              setDraftUrl(normalizedUrl);
+              $customApiKey.set(normalizedKey);
+              $customApiModel.set(normalizedModel);
+              notify("已保存自定义 API 配置");
+            }}
+          >
+            保存
+          </button>
+          <button
+            type="button"
+            className="sl-sp-btn"
+            disabled={!configured && !draftUrl && !draftKey && !draftModel}
+            onClick={() => {
+              $customApiBaseUrl.set("");
+              $customApiKey.set("");
+              $customApiModel.set("");
+              setDraftUrl("");
+              setDraftKey("");
+              setDraftModel("");
+              notify("已清除自定义 API 配置");
+            }}
+          >
+            清除配置
+          </button>
+        </DetailActionBar>
+      }
+    >
       <Section>
         <Row
           label="API 地址"
@@ -434,47 +522,6 @@ export function DetailCustomConfig({ onBack }: { onBack: () => void }) {
         </Row>
         <Row label="模型" description="该服务支持的模型名称" stacked>
           <Input value={draftModel} placeholder="模型名称" onChange={setDraftModel} />
-        </Row>
-      </Section>
-      <Section>
-        <Row label="操作" description="保存以上三项配置">
-          <div className="sl-sp-inline-controls sl-sp-detail-actions">
-            <button
-              type="button"
-              className="sl-sp-btn sl-sp-btn--primary"
-              disabled={!draftUrl.trim() || !draftKey.trim() || !draftModel.trim()}
-              onClick={() => {
-                const normalizedUrl = normalizeApiBaseUrl(draftUrl);
-                if (!normalizedUrl) {
-                  notify("API 地址必须使用 HTTPS（仅 localhost 可使用 HTTP）");
-                  return;
-                }
-                $customApiBaseUrl.set(normalizedUrl);
-                setDraftUrl(normalizedUrl);
-                $customApiKey.set(draftKey.trim());
-                $customApiModel.set(draftModel.trim());
-                notify("已保存自定义 API 配置");
-              }}
-            >
-              保存
-            </button>
-            <button
-              type="button"
-              className="sl-sp-btn"
-              disabled={!baseUrl && !apiKey && !model}
-              onClick={() => {
-                $customApiBaseUrl.set("");
-                $customApiKey.set("");
-                $customApiModel.set("");
-                setDraftUrl("");
-                setDraftKey("");
-                setDraftModel("");
-                notify("已清除自定义 API 配置");
-              }}
-            >
-              清除配置
-            </button>
-          </div>
         </Row>
       </Section>
     </DetailShell>

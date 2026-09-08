@@ -955,7 +955,7 @@
 }
 
 /* ===== 按需翻译按钮状态 ===== */
-#SpicyLyricsPage .ViewControls #TranslateToggle.active {
+#SpicyLyricsPage .ViewControls #TranslateToggle.translating {
   color: var(--spice-text-positive, #1ed760);
 }
 
@@ -965,11 +965,14 @@
 
 #SpicyLyricsPage .ViewControls #TranslateToggle:disabled {
   cursor: default;
+  color: inherit;
+  opacity: 0.55;
 }
 
 #SpicyLyricsPage .ViewControls #TranslateToggle.translating:disabled {
   cursor: wait;
-  opacity: 0.68;
+  color: var(--spice-text-positive, #1ed760);
+  opacity: 0.75;
 }
 
 #SpicyLyricsPage .ViewControls #TranslateToggle:focus-visible {

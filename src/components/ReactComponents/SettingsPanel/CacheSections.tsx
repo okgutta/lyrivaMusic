@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   RemoveCurrentLyrics_AllCaches,
   RemoveLyricsCache,
@@ -22,6 +23,42 @@ function notify(message: string): void {
 interface Props {
   query: string;
   sectionFilter: string;
+}
+
+function ConfirmButton({
+  label,
+  confirmLabel = "再次点击确认",
+  onConfirm,
+}: {
+  label: string;
+  confirmLabel?: string;
+  onConfirm: () => void | Promise<void>;
+}) {
+  const [armed, setArmed] = useState(false);
+
+  useEffect(() => {
+    if (!armed) return;
+    const timer = window.setTimeout(() => setArmed(false), 4000);
+    return () => window.clearTimeout(timer);
+  }, [armed]);
+
+  return (
+    <button
+      type="button"
+      className={`sl-sp-btn sl-sp-btn--danger${armed ? " sl-sp-btn--confirming" : ""}`}
+      aria-live="polite"
+      onClick={() => {
+        if (!armed) {
+          setArmed(true);
+          return;
+        }
+        setArmed(false);
+        void onConfirm();
+      }}
+    >
+      {armed ? confirmLabel : label}
+    </button>
+  );
 }
 
 export default function CacheSection({ query, sectionFilter }: Props) {
@@ -58,16 +95,13 @@ export default function CacheSection({ query, sectionFilter }: Props) {
 
           {r3 && (
             <Row label="清除全部歌词缓存">
-              <button
-                type="button"
-                className="sl-sp-btn"
-                onClick={() => {
-                  void RemoveLyricsCache(true);
+              <ConfirmButton
+                label="清除全部"
+                onConfirm={async () => {
+                  await RemoveLyricsCache(true);
                   notify("已清除全部歌词缓存");
                 }}
-              >
-                清除
-              </button>
+              />
             </Row>
           )}
         </Section>
@@ -81,17 +115,14 @@ export default function CacheSection({ query, sectionFilter }: Props) {
 
           {r5 && (
             <Row label="清空翻译缓存">
-              <button
-                type="button"
-                className="sl-sp-btn"
-                onClick={() => {
+              <ConfirmButton
+                label="清空全部"
+                onConfirm={() => {
                   clearTranslationCache();
                   clearAllTrackCache();
                   notify("已清空全部翻译缓存");
                 }}
-              >
-                清空全部
-              </button>
+              />
             </Row>
           )}
         </Section>

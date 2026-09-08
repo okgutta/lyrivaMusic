@@ -6,7 +6,6 @@ import CacheSection from "./CacheSections.tsx";
 import DeveloperSection from "./DeveloperSection.tsx";
 import ExperimentsSection from "./ExperimentsSection.tsx";
 import LyricsSection from "./LyricsSection.tsx";
-import LyricsSourceSection from "./LyricsSourceSection.tsx";
 import PlaybackSection from "./PlaybackSection.tsx";
 import ServicesSection from "./ServicesSection.tsx";
 import {
@@ -17,7 +16,7 @@ import {
   DetailOpenAIConfig,
   DetailTranslationModel,
 } from "./DetailPages.tsx";
-import { SearchBar, Section } from "./components.tsx";
+import { SearchBar } from "./components.tsx";
 import { $spicyLyricsVersion } from "../../../utils/stores.ts";
 
 const SECTIONS = [
@@ -32,14 +31,9 @@ const SECTIONS = [
     desc: "歌词模式、动画与界面元素",
   },
   {
-    value: "lyrics-source",
-    label: "歌词来源",
-    desc: "LYRIVA 主源已内置；Genius 兜底需配置 Token",
-  },
-  {
     value: "lyrics-service",
-    label: "歌词翻译",
-    desc: "缺失译文时使用的翻译服务与目标语言",
+    label: "歌词服务",
+    desc: "歌词来源、按需翻译服务与目标语言",
   },
   {
     value: "playback",
@@ -100,14 +94,6 @@ function SidebarIcon({ value }: { value: SectionValue }) {
           <path d="M13.2 12V5.5l2-.6" {...s} />
         </svg>
       );
-    case "lyrics-source":
-      return (
-        <svg {...common}>
-          <circle cx="7" cy="7" r="4.5" {...s} />
-          <path d="M10.5 10.5L14 14" {...s} />
-          <path d="M7 5.4l2.4 1.6L7 8.6V5.4z" fill="currentColor" stroke="none" />
-        </svg>
-      );
     case "lyrics-service":
       return (
         <svg {...common}>
@@ -155,14 +141,6 @@ function sectionFor(
       return <BackgroundSection query={query} sectionFilter={sectionFilter} />;
     case "lyrics-display":
       return <LyricsSection query={query} sectionFilter={sectionFilter} />;
-    case "lyrics-source":
-      return (
-        <LyricsSourceSection
-          query={query}
-          sectionFilter={sectionFilter}
-          onOpenDetail={openDetail}
-        />
-      );
     case "lyrics-service":
       return (
         <ServicesSection query={query} sectionFilter={sectionFilter} onOpenDetail={openDetail} />
@@ -200,7 +178,7 @@ function DetailPage({ id, onBack }: { id: DetailId; onBack: () => void }) {
 
 export default function SettingsPanel() {
   const [query, setQuery] = useState("");
-  const [activeCategory, setActiveCategory] = useState<SectionValue>("appearance");
+  const [activeCategory, setActiveCategory] = useState<SectionValue>("lyrics-display");
   const [detail, setDetail] = useState<DetailId | null>(null);
   const version = useStore($spicyLyricsVersion);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -214,10 +192,13 @@ export default function SettingsPanel() {
       setSearchEmpty(false);
       return;
     }
-    const groups = scrollRef.current?.querySelectorAll<HTMLElement>(".sl-sp-section");
-    if (!groups) return;
+    const categories = scrollRef.current?.querySelectorAll<HTMLElement>(".sl-sp-search-category");
+    if (!categories) return;
     setSearchEmpty(
-      Array.from(groups).every((g) => g.querySelectorAll(".sl-sp-row, .sl-sp-nav-row").length === 0)
+      Array.from(categories).every(
+        (category) =>
+          category.querySelectorAll(".sl-sp-row, .sl-sp-nav-row, .sl-sp-info-banner").length === 0
+      )
     );
   }, [searching, query, activeCategory, detail]);
 
@@ -243,9 +224,7 @@ export default function SettingsPanel() {
   const activeSection = SECTIONS.find((s) => s.value === activeCategory) ?? SECTIONS[0];
 
   return (
-    <div
-      className={`slm w-40 sl-sp-root hidden-modal-header-style${searching ? " sl-sp-root--searching" : ""}`}
-    >
+    <div className="slm w-40 sl-sp-root hidden-modal-header-style">
       <div className="sl-sp-sidebar">
         <div className="sl-sp-sidebar-head">
           <span className="sl-sp-brand-mark" aria-hidden="true">
@@ -336,9 +315,15 @@ export default function SettingsPanel() {
               <h2 className="sl-sp-page-title">搜索结果</h2>
               <p className="sl-sp-page-desc">与「{query.trim()}」相关的设置</p>
               {SECTIONS.map((section) => (
-                <Section key={section.value} title={section.label}>
+                <div
+                  key={section.value}
+                  className="sl-sp-search-category"
+                  role="group"
+                  aria-label={section.label}
+                >
+                  <div className="sl-sp-search-category-title">{section.label}</div>
                   {sectionFor(section.value, query, "All", openDetail)}
-                </Section>
+                </div>
               ))}
               {searchEmpty && (
                 <div className="sl-sp-empty">
@@ -366,7 +351,7 @@ export default function SettingsPanel() {
                     className="sl-sp-btn"
                     onClick={() => {
                       setQuery("");
-                      setActiveCategory("appearance");
+                      setActiveCategory("lyrics-display");
                     }}
                   >
                     清除搜索

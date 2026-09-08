@@ -15,7 +15,7 @@
   --slsp-accent-deep: #5b51e0; /* 渐变深端：主按钮底（白字对比达标） */
   --slsp-accent-hover: #7d73ff;
   --slsp-accent-text: #b7aeff; /* 靛紫文本/图标：暗玻璃上 ≥4.5:1 */
-  --slsp-accent-glow: rgba(110, 99, 240, 0.45);
+  --slsp-accent-glow: rgba(110, 99, 240, 0.34);
   --slsp-accent-tint: rgba(110, 99, 240, 0.16);
   --slsp-accent-ring: rgba(110, 99, 240, 0.5);
   --slsp-well: rgba(0, 0, 0, 0.3); /* 输入井 / 分段轨 */
@@ -27,8 +27,8 @@
 
 /* ===== 弹窗尺寸与链路（侧栏 + 内容通铺整块玻璃） ===== */
 sl-generic-modal.SpicyLyricsModal .sl-modal-overlay .slmodal-settingsPanel > div {
-  width: min(78vw, 920px);
-  height: min(76vh, 600px);
+  width: min(86vw, 960px);
+  height: min(82vh, 680px);
   container: slsettings / inline-size;
 }
 
@@ -97,7 +97,7 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
   position: absolute;
   inset: 0 0 auto 0;
   height: 240px;
-  background: radial-gradient(560px 220px at 62% 0%, rgba(110, 99, 240, 0.16), transparent 72%);
+  background: radial-gradient(560px 220px at 62% 0%, rgba(110, 99, 240, 0.11), transparent 72%);
   pointer-events: none;
   z-index: -1;
 }
@@ -161,12 +161,6 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
   gap: 3px;
   padding: 0 2px;
   scrollbar-width: none;
-  transition: opacity 0.2s var(--slsp-ease-out);
-}
-
-/* 搜索时侧栏退后一步，视觉焦点让给结果 */
-.sl-sp-root--searching .sl-sp-sidebar-nav {
-  opacity: 0.45;
 }
 
 .sl-sp-sidebar-item {
@@ -174,6 +168,7 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
   align-items: center;
   gap: 10px;
   width: 100%;
+  min-height: 40px;
   padding: 7px 11px;
   background: none;
   border: none;
@@ -277,8 +272,8 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border: none;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.07);
@@ -307,7 +302,7 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
 
 .sl-sp-toolbar {
   flex-shrink: 0;
-  padding: var(--space-3) 44px var(--space-2) 0;
+  padding: var(--space-3) 48px var(--space-2) 0;
 }
 
 /* 搜索：玻璃胶囊，聚焦时 ring 转 accent */
@@ -315,7 +310,7 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  height: 36px;
+  height: 40px;
   padding: 0 var(--space-3);
   background: var(--slsp-well);
   box-shadow: inset 0 0 0 1px var(--slsp-hairline);
@@ -360,8 +355,8 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: 28px;
+    height: 28px;
     border: none;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.12);
@@ -372,6 +367,11 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
     &:hover {
       background: rgba(255, 255, 255, 0.2);
       color: var(--color-text-primary);
+    }
+
+    &:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--slsp-accent-ring);
     }
   }
 }
@@ -422,13 +422,25 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
   line-height: 1.45;
 }
 
-/* 搜索结果页：分组直接平铺（无 page-groups 包裹），补上组间距 */
-.sl-sp-search-results > .sl-sp-section {
+/* 搜索结果按来源分类，但不再额外套一层卡片，避免分组卡嵌套。 */
+.sl-sp-search-category {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
   margin-top: var(--space-5);
 }
 
-/* 搜索结果：整组无命中行时隐藏（标题 + 空卡一起消失，旧版会留下空壳） */
-.sl-sp-search-results > .sl-sp-section:not(:has(.sl-sp-row, .sl-sp-nav-row)) {
+.sl-sp-search-category-title {
+  margin: 0 6px -4px;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-caption-size) !important;
+  font-weight: var(--w-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* 整个分类没有命中项时隐藏，搜索结果不会留下空标题。 */
+.sl-sp-search-category:not(:has(.sl-sp-row, .sl-sp-nav-row, .sl-sp-info-banner)) {
   display: none;
 }
 
@@ -441,6 +453,43 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
   flex-direction: column;
   gap: var(--space-5);
   margin-top: var(--space-4);
+}
+
+/* 说明条用于展示固定行为，不伪装成可操作的设置行。 */
+.sl-sp-info-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(110, 99, 240, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(183, 174, 255, 0.16);
+  color: var(--slsp-accent-text);
+
+  > svg {
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  strong {
+    color: var(--color-text-primary);
+    font-size: var(--text-body-size) !important;
+    font-weight: var(--w-semibold);
+    line-height: 1.35;
+  }
+
+  span {
+    color: var(--color-text-secondary);
+    font-size: var(--text-footnote-size) !important;
+    line-height: 1.45;
+  }
 }
 
 /* ── 分组：玻璃卡 + overline 小标题（accent 点） ── */
@@ -481,11 +530,11 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
 
 /* 分组容器：白 5% 玻璃渐变面 + 顶部高光 + 柔和落影 */
 .sl-sp-group {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.028));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.048), rgba(255, 255, 255, 0.024));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.075),
     inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-    0 10px 28px -14px rgba(0, 0, 0, 0.45);
+    0 8px 22px -16px rgba(0, 0, 0, 0.42);
   border-radius: 14px;
   overflow: hidden;
 }
@@ -553,7 +602,8 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
   cursor: not-allowed;
 
   .sl-sp-label-wrap,
-  .sl-sp-control {
+  .sl-sp-control,
+  .sl-sp-nav-value {
     opacity: 0.45;
   }
 
@@ -628,8 +678,9 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
   display: inline-flex;
   align-items: center;
   cursor: pointer;
-  width: 42px;
-  height: 25px;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
 
   input {
     opacity: 0;
@@ -697,6 +748,7 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
   background: none;
   padding: 5px 12px;
   border-radius: 7px;
+  min-height: 36px;
   color: var(--color-text-secondary);
   font-size: var(--text-caption-size) !important;
   font-weight: var(--w-medium);
@@ -733,14 +785,21 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
 
 /* ── Navigation Row：label + 当前值 + chevron ── */
 .sl-sp-nav-row {
+  appearance: none;
+  width: 100%;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
   position: relative;
 
-  &:hover {
+  &:not(:disabled):hover {
     background: rgba(255, 255, 255, 0.04);
   }
 
-  &:hover .sl-sp-nav-value svg {
+  &:not(:disabled):hover .sl-sp-nav-value svg {
     color: var(--color-text-primary);
     transform: translateX(1px);
   }
@@ -938,7 +997,8 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
 .sl-sp-slider-reset {
   border: none;
   background: none;
-  padding: 0;
+  min-height: 28px;
+  padding: 2px 6px;
   font-size: var(--text-caption-size) !important;
   font-weight: var(--w-medium);
   color: var(--slsp-accent-text);
@@ -947,6 +1007,12 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
 
   &:hover {
     color: #ffffff;
+  }
+
+  &:focus-visible {
+    outline: none;
+    border-radius: 6px;
+    box-shadow: 0 0 0 2px var(--slsp-accent-ring);
   }
 }
 
@@ -959,6 +1025,7 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
 .sl-sp-btn {
   border: none;
   border-radius: 8px;
+  min-height: 36px;
   padding: 7px 14px;
   font-size: var(--text-caption-size) !important;
   font-weight: var(--w-semibold);
@@ -978,6 +1045,13 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
 
   &:active {
     transform: scale(0.97);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow:
+      inset 0 0 0 1px var(--slsp-hairline-strong),
+      0 0 0 2px var(--slsp-accent-ring);
   }
 
   &:disabled {
@@ -1004,6 +1078,21 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
       opacity: 0.4;
     }
   }
+
+  &.sl-sp-btn--danger {
+    color: #ffb4b4;
+
+    &:hover {
+      background: rgba(255, 92, 92, 0.12);
+      box-shadow: inset 0 0 0 1px rgba(255, 130, 130, 0.22);
+    }
+  }
+
+  &.sl-sp-btn--confirming {
+    background: rgba(255, 92, 92, 0.16);
+    box-shadow: inset 0 0 0 1px rgba(255, 130, 130, 0.32);
+    color: #ffd2d2;
+  }
 }
 
 .sl-sp-refresh {
@@ -1012,6 +1101,7 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
   color: var(--color-text-primary);
   border: none;
   border-radius: 8px;
+  min-height: 36px;
   padding: 6px 12px;
   font-size: var(--text-caption-size) !important;
   font-weight: var(--w-medium);
@@ -1026,6 +1116,13 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
 
   &:active {
     transform: scale(0.97);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow:
+      inset 0 0 0 1px var(--slsp-hairline-strong),
+      0 0 0 2px var(--slsp-accent-ring);
   }
 
   &:disabled {
@@ -1055,6 +1152,8 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
 .sl-sp-detail {
   display: flex;
   flex-direction: column;
+  height: 100%;
+  min-height: 0;
 }
 
 .sl-sp-detail-header {
@@ -1071,6 +1170,7 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
   gap: 4px;
   align-self: flex-start;
   border: none;
+  min-height: 36px;
   background: none;
   padding: 6px 10px 6px 6px;
   border-radius: 8px;
@@ -1112,6 +1212,31 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
   padding-top: var(--space-3);
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+.sl-sp-detail-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 58px;
+  margin-top: var(--space-3);
+  padding: 10px 0;
+  border-top: 1px solid var(--slsp-hairline);
+  background: rgba(18, 18, 20, 0.34);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+.sl-sp-save-status {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-footnote-size) !important;
+  line-height: 1.35;
+}
+
+.sl-sp-save-status--dirty {
+  color: var(--slsp-accent-text);
 }
 
 .sl-sp-detail-actions {
@@ -1269,9 +1394,9 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
   }
 }
 
-/* ===== 窄弹窗回退：侧栏变顶栏（横向滑动 chips） =====
+/* ===== 中窄弹窗回退：侧栏变顶栏（横向滑动 chips） =====
    用容器查询测量弹窗自身宽度（slsettings container），不受窗口/DPI 影响。 */
-@container slsettings (max-width: 480px) {
+@container slsettings (max-width: 680px) {
   sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .sl-sp-root {
     /* 基础规则的 row 带 !important（对抗 Spotify 工具类），这里必须同样 important 才能翻成纵向 */
     flex-direction: column !important;
@@ -1298,14 +1423,17 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
   }
 
   .sl-sp-sidebar-nav {
-    flex-direction: row;
-    overflow-x: auto;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: visible;
+    width: 100%;
     gap: 4px;
   }
 
   .sl-sp-sidebar-item {
     flex-shrink: 0;
-    width: auto;
+    width: 100%;
+    min-height: 36px;
     border-radius: 999px;
     padding: 6px 12px;
   }
@@ -1321,5 +1449,60 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
 
   .sl-sp-page-title {
     font-size: 1.2rem !important;
+  }
+
+  .sl-sp-segmented {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .sl-sp-segmented-item {
+    flex: 1 1 88px;
+    min-height: 36px;
+  }
+
+  .sl-sp-row:has(.sl-sp-segmented),
+  .sl-sp-row:has(.sl-sp-slider) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sl-sp-row:has(.sl-sp-segmented) .sl-sp-control,
+  .sl-sp-row:has(.sl-sp-slider) .sl-sp-control,
+  .sl-sp-slider {
+    width: 100%;
+  }
+}
+
+@container slsettings (max-width: 480px) {
+  .sl-sp-content {
+    padding: 0 var(--space-3);
+  }
+
+  .sl-sp-row {
+    padding-inline: 14px;
+  }
+
+  .sl-sp-sidebar-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sl-sp-detail-footer {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .sl-sp-save-status {
+    min-height: 18px;
+  }
+
+  .sl-sp-detail-actions {
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .sl-sp-detail-actions .sl-sp-btn {
+    flex: 1;
   }
 }

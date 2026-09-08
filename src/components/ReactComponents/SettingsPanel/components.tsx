@@ -198,30 +198,32 @@ export function NavigationRow({
   disabledReason?: string;
 }) {
   const labelId = useId();
+  const descriptionId = useId();
+  const reasonId = useId();
+  const describedBy = [description ? descriptionId : "", disabled && disabledReason ? reasonId : ""]
+    .filter(Boolean)
+    .join(" ");
   return (
     <RowLabelContext.Provider value={labelId}>
-      <div
+      <button
+        type="button"
         className={`sl-sp-row sl-sp-nav-row${disabled ? " sl-sp-row--disabled" : ""}`}
-        role="button"
-        tabIndex={disabled ? -1 : 0}
         aria-labelledby={labelId}
-        aria-disabled={disabled || undefined}
-        onClick={disabled ? undefined : onClick}
-        onKeyDown={(e) => {
-          if (disabled) return;
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onClick();
-          }
-        }}
+        aria-describedby={describedBy || undefined}
+        disabled={disabled}
+        onClick={onClick}
       >
-        <div className="sl-sp-label-wrap">
+        <span className="sl-sp-label-wrap">
           <span className="sl-sp-label" id={labelId}>
             {label}
           </span>
-          {description && <span className="sl-sp-description">{description}</span>}
-        </div>
-        <div className="sl-sp-nav-value">
+          {description && (
+            <span className="sl-sp-description" id={descriptionId}>
+              {description}
+            </span>
+          )}
+        </span>
+        <span className="sl-sp-nav-value">
           {value && (
             <span
               className={`sl-sp-nav-value-text${valueState === "ok" ? " sl-sp-nav-value-text--ok" : ""}${valueState === "unset" ? " sl-sp-nav-value-text--unset" : ""}`}
@@ -245,9 +247,13 @@ export function NavigationRow({
               strokeLinejoin="round"
             />
           </svg>
-        </div>
-        {disabled && disabledReason && <div className="sl-sp-row-tooltip">{disabledReason}</div>}
-      </div>
+        </span>
+        {disabled && disabledReason && (
+          <span className="sl-sp-row-tooltip" id={reasonId}>
+            {disabledReason}
+          </span>
+        )}
+      </button>
     </RowLabelContext.Provider>
   );
 }
@@ -370,6 +376,7 @@ export function SearchBar({ value, onChange }: { value: string; onChange: (v: st
         viewBox="0 0 14 14"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true"
       >
         <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.5" />
         <line
@@ -392,7 +399,12 @@ export function SearchBar({ value, onChange }: { value: string; onChange: (v: st
         aria-label="搜索设置"
       />
       {value && (
-        <button className="sl-sp-search-clear" onClick={() => onChange("")} aria-label="清除搜索">
+        <button
+          type="button"
+          className="sl-sp-search-clear"
+          onClick={() => onChange("")}
+          aria-label="清除搜索"
+        >
           <svg
             width="10"
             height="10"

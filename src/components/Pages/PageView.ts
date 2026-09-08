@@ -392,15 +392,15 @@ Global.Event.listen(
 function translationControlPresentation(state: TranslationState) {
   switch (state) {
     case "partial":
-      return { label: "补全歌词翻译", icon: Icons.Translate, active: true, disabled: false };
+      return { label: "补全歌词翻译", icon: Icons.Translate, disabled: false };
     case "translating":
-      return { label: "正在翻译歌词", icon: Icons.Translate, active: true, disabled: true };
+      return { label: "正在翻译歌词", icon: Icons.Translate, disabled: true };
     case "complete":
-      return { label: "已有歌词翻译", icon: Icons.Translate, active: true, disabled: true };
+      return { label: "已有歌词翻译", icon: Icons.Translate, disabled: true };
     case "error":
-      return { label: "重新翻译歌词", icon: Icons.TranslateOff, active: false, disabled: false };
+      return { label: "重新翻译歌词", icon: Icons.TranslateOff, disabled: false };
     default:
-      return { label: "翻译当前歌词", icon: Icons.TranslateOff, active: false, disabled: false };
+      return { label: "翻译当前歌词", icon: Icons.TranslateOff, disabled: false };
   }
 }
 
@@ -410,14 +410,13 @@ function updateTranslationControl(): void {
   const state = $translationState.get();
   const presentation = translationControlPresentation(state);
   button.innerHTML = presentation.icon;
-  button.classList.toggle("active", presentation.active);
   button.classList.toggle("translating", state === "translating");
   button.classList.toggle("error", state === "error");
   button.disabled = presentation.disabled;
   button.dataset.translationState = state;
   button.setAttribute("aria-label", presentation.label);
   button.setAttribute("aria-busy", String(state === "translating"));
-  button.setAttribute("aria-pressed", String(state === "partial" || state === "complete"));
+  button.removeAttribute("aria-pressed");
   Tooltips.Translate?.setContent(presentation.label);
 }
 
@@ -462,11 +461,10 @@ function AppendViewControls(ReAppend: boolean = false) {
           ${isRomanized ? Icons.DisableRomanization : Icons.EnableRomanization}
         </button>
         <button id="TranslateToggle" type="button"
-          class="ViewControl${translationControl.active ? " active" : ""}${translationState === "translating" ? " translating" : ""}${translationState === "error" ? " error" : ""}"
+          class="ViewControl${translationState === "translating" ? " translating" : ""}${translationState === "error" ? " error" : ""}"
           data-translation-state="${translationState}"
           aria-label="${translationControl.label}"
           aria-busy="${translationState === "translating"}"
-          aria-pressed="${translationState === "partial" || translationState === "complete"}"
           ${translationControl.disabled ? "disabled" : ""}>
           ${translationControl.icon}
         </button>

@@ -5,6 +5,7 @@ import {
   $customApiModel,
   $deepSeekApiKey,
   $deepSeekModel,
+  $geniusApiToken,
   $openaiApiKey,
   $openaiModel,
   $translationProvider,
@@ -57,13 +58,15 @@ export default function ServicesSection({ query, sectionFilter, onOpenDetail }: 
   const translationTargetLang = useStore($translationTargetLang);
   const deepSeekApiKey = useStore($deepSeekApiKey);
   const openaiApiKey = useStore($openaiApiKey);
+  const geniusApiToken = useStore($geniusApiToken);
   const customConfigured = Boolean(
     $customApiBaseUrl.get() && $customApiKey.get() && $customApiModel.get()
   );
 
   if (sectionFilter !== "All" && sectionFilter !== SECTION_NAME) return null;
 
-  const r1 = matches(query, "歌词翻译", "把歌词翻译成目标语言");
+  const r1 = matches(query, "自动显示歌词翻译", "已有译文自动显示，无译文时按需翻译");
+  const rSource = matches(query, "Genius API Token", "Genius 歌词来源 LYRIVA 未命中时自动兜底");
   const rService = matches(query, "翻译服务", "Google DeepSeek ChatGPT 自定义");
   const r2 = matches(query, "翻译目标语言", "歌词翻译成哪种语言");
   const rKey =
@@ -71,7 +74,7 @@ export default function ServicesSection({ query, sectionFilter, onOpenDetail }: 
     matches(query, "自定义 API", "自定义 OpenAI 兼容端点");
   const rModel = matches(query, "翻译模型", "翻译使用的模型");
 
-  if (!r1 && !rService && !r2 && !rKey && !rModel) return null;
+  if (!r1 && !rSource && !rService && !r2 && !rKey && !rModel) return null;
 
   // 翻译模型行的当前值按服务显示
   const modelValue =
@@ -85,24 +88,56 @@ export default function ServicesSection({ query, sectionFilter, onOpenDetail }: 
 
   return (
     <>
-      {/* 已有译文自动显示；这里只配置按需翻译使用的服务。 */}
-      <Section>
-        {r1 && (
-          <Row label="歌词翻译" description="已有译文自动显示；缺失时可在歌词页按需翻译">
-            <span className="sl-sp-nav-value-text">自动显示</span>
-          </Row>
-        )}
-        {rService && (
-          <Row label="翻译服务" stacked>
-            <SegmentedControl
-              value={translationProvider}
-              options={PROVIDER_OPTIONS}
-              labels={PROVIDER_LABELS}
-              onChange={(v) => $translationProvider.set(v as typeof translationProvider)}
-            />
-          </Row>
-        )}
-      </Section>
+      {r1 && (
+        <div className="sl-sp-info-banner" role="note">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 18 18"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
+          >
+            <circle cx="9" cy="9" r="7" stroke="currentColor" strokeWidth="1.4" />
+            <path d="M9 8v4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            <circle cx="9" cy="5.5" r="0.8" fill="currentColor" />
+          </svg>
+          <div>
+            <strong>译文会自动显示</strong>
+            <span>歌曲没有译文时，才需要在歌词页点击翻译按钮。</span>
+          </div>
+        </div>
+      )}
+
+      {rSource && (
+        <Section
+          title="歌词来源"
+          description="LYRIVA 是内置主源；Genius 只在主源未命中时提供静态歌词。"
+        >
+          <NavigationRow
+            label="Genius API Token"
+            description="LYRIVA 未命中时自动使用 Genius 静态歌词"
+            value={geniusApiToken ? "已配置" : "未配置"}
+            valueState={geniusApiToken ? "ok" : "unset"}
+            onClick={() => onOpenDetail("genius-token")}
+          />
+        </Section>
+      )}
+
+      {rService && (
+        <Section title="按需翻译">
+          {rService && (
+            <Row label="翻译服务" stacked>
+              <SegmentedControl
+                value={translationProvider}
+                options={PROVIDER_OPTIONS}
+                labels={PROVIDER_LABELS}
+                onChange={(v) => $translationProvider.set(v as typeof translationProvider)}
+              />
+            </Row>
+          )}
+        </Section>
+      )}
 
       {/* ── 翻译配置 ── */}
       {(r2 || rKey || rModel) && (
