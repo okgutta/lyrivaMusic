@@ -2,11 +2,17 @@
 //   node --experimental-strip-types src/utils/Lyrics/Translate/trackCache.test.ts
 // trackCache.ts 顶部 import 了 stores.ts（stores.ts 在模块加载时读 Spicetify.LocalStorage），
 // 故在 import 前先注入最小 Spicetify 桩，避免 Node 环境 ReferenceError。
+const storage = new Map<string, string>();
 (globalThis as any).Spicetify = {
-  LocalStorage: { get: () => null, set: () => undefined },
+  LocalStorage: {
+    get: (key: string) => storage.get(key) ?? null,
+    set: (key: string, value: string) => storage.set(key, value),
+    remove: (key: string) => storage.delete(key),
+  },
 };
 (globalThis as any).window = { _spicy_lyrics_metadata: undefined };
-const { normalizeTrackUri, parseCacheKey, fingerprintSource } = await import("./trackCache.ts");
+const { normalizeTrackUri, parseCacheKey, fingerprintSource, getReusableTrackCache } =
+  await import("./trackCache.ts");
 
 let failures = 0;
 let passed = 0;
@@ -53,6 +59,43 @@ check(
 check("行数不同指纹不同", fingerprintSource(["a"]) !== fingerprintSource(["a", "b"]));
 check("顺序敏感", fingerprintSource(["a", "b"]) !== fingerprintSource(["b", "a"]));
 check("内容不同指纹不同", fingerprintSource(["a"]) !== fingerprintSource(["b"]));
+
+// ── 跨服务整首缓存复用 ──────────────────────────────────────────────────────
+{
+  const uri = "spotify:track:cross-provider";
+  const normalizedUri = normalizeTrackUri(uri);
+  const fingerprint = fingerprintSource(["hello"]);
+  const olderKey = `SL:translationTrack:deepseek:${normalizedUri}:zh-CN`;
+  const newerKey = `SL:translationTrack:openai:${normalizedUri}:zh-CN`;
+  storage.set("SL:translationTrackSchema", "1");
+  storage.set("SL:translationTrackIndex", JSON.stringify({ trackUris: [olderKey, newerKey] }));
+  storage.set(
+    olderKey,
+    JSON.stringify({
+      lang: "en",
+      targetLang: "zh-CN",
+      lines: ["旧译文"],
+      sourceLines: ["hello"],
+      sourceFingerprint: fingerprint,
+      timestamp: Date.now() - 1000,
+    })
+  );
+  storage.set(
+    newerKey,
+    JSON.stringify({
+      lang: "en",
+      targetLang: "zh-CN",
+      lines: ["新译文"],
+      sourceLines: ["hello"],
+      sourceFingerprint: fingerprint,
+      timestamp: Date.now(),
+    })
+  );
+
+  const reusable = getReusableTrackCache(uri, "zh-CN", fingerprint, 1);
+  check("跨服务选择最新缓存", reusable?.lines[0] === "新译文", reusable);
+  check("歌词指纹不符时不复用", getReusableTrackCache(uri, "zh-CN", "other", 1) === null);
+}
 
 console.log(`[trackCache] ${passed} passed, ${failures} failed`);
 if (failures > 0) (globalThis as any).process?.exit?.(1);

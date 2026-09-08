@@ -1,6 +1,6 @@
 /**
  * 曲目级翻译缓存（localStorage）。
- * key = `SL:translationTrack:{归一化uri}:{目标语言}`，14 天有效，最多 100 首。
+ * key = `SL:translationTrack:{翻译服务}:{归一化uri}:{目标语言}`，14 天有效，最多 100 首。
  *
  * 核心价值：
  *  - 同一首歌再次播放时整首直接命中（含源指纹校验：同一首歌、同一版歌词才复用），零请求；
@@ -245,6 +245,44 @@ export function getTrackCache(uri: string, targetLang: string): TrackCacheEntry 
     return null;
   }
   return entry;
+}
+
+/**
+ * 查找可复用的整首缓存。读取不受当前服务限制：同一首歌、目标语言和
+ * 歌词指纹一致时，优先使用所有服务中最新的一份，避免切换服务后译文消失。
+ */
+export function getReusableTrackCache(
+  uri: string,
+  targetLang: string,
+  sourceFingerprint: string,
+  lineCount: number
+): TrackCacheEntry | null {
+  runSchemaMigration();
+  const storage = getKVStorage();
+  if (!storage || !uri) return null;
+
+  const normalizedUri = normalizeTrackUri(uri);
+  let newest: TrackCacheEntry | null = null;
+  for (const cacheKey of collectAllCacheKeys(storage)) {
+    const parsed = parseCacheKey(cacheKey);
+    if (!parsed || parsed.trackUri !== normalizedUri || parsed.targetLang !== targetLang) {
+      continue;
+    }
+    const entry = parseEntry(storage.getItem(cacheKey));
+    if (entry && Date.now() - entry.timestamp > CACHE_EXPIRY_MS) {
+      safeRemove(storage, cacheKey);
+      continue;
+    }
+    if (
+      !entry ||
+      entry.sourceFingerprint !== sourceFingerprint ||
+      entry.lines.length !== lineCount
+    ) {
+      continue;
+    }
+    if (!newest || entry.timestamp > newest.timestamp) newest = entry;
+  }
+  return newest;
 }
 
 export function setTrackCache(

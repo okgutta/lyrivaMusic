@@ -7,11 +7,10 @@ import {
   $deepSeekModel,
   $openaiApiKey,
   $openaiModel,
-  $translationEnabled,
   $translationProvider,
   $translationTargetLang,
 } from "../../../utils/stores.ts";
-import { matches, NavigationRow, Row, Section, SegmentedControl, Toggle } from "./components.tsx";
+import { matches, NavigationRow, Row, Section, SegmentedControl } from "./components.tsx";
 
 const SECTION_NAME = "lyrics-service";
 
@@ -54,7 +53,6 @@ interface Props {
 }
 
 export default function ServicesSection({ query, sectionFilter, onOpenDetail }: Props) {
-  const translationEnabled = useStore($translationEnabled);
   const translationProvider = useStore($translationProvider);
   const translationTargetLang = useStore($translationTargetLang);
   const deepSeekApiKey = useStore($deepSeekApiKey);
@@ -87,11 +85,13 @@ export default function ServicesSection({ query, sectionFilter, onOpenDetail }: 
 
   return (
     <>
-      {/* ── 主开关 + 翻译服务：页面最醒目的两层 ── */}
+      {/* 已有译文自动显示；这里只配置按需翻译使用的服务。 */}
       <Section>
-        <Row label="歌词翻译">
-          <Toggle checked={translationEnabled} onChange={(v) => $translationEnabled.set(v)} />
-        </Row>
+        {r1 && (
+          <Row label="歌词翻译" description="已有译文自动显示；缺失时可在歌词页按需翻译">
+            <span className="sl-sp-nav-value-text">自动显示</span>
+          </Row>
+        )}
         {rService && (
           <Row label="翻译服务" stacked>
             <SegmentedControl
@@ -99,7 +99,6 @@ export default function ServicesSection({ query, sectionFilter, onOpenDetail }: 
               options={PROVIDER_OPTIONS}
               labels={PROVIDER_LABELS}
               onChange={(v) => $translationProvider.set(v as typeof translationProvider)}
-              disabled={!translationEnabled}
             />
           </Row>
         )}
@@ -112,14 +111,12 @@ export default function ServicesSection({ query, sectionFilter, onOpenDetail }: 
             <NavigationRow
               label="翻译目标语言"
               value={LANG_LABELS[translationTargetLang] ?? translationTargetLang}
-              disabled={!translationEnabled}
-              disabledReason="请先启用「歌词翻译」再修改此项"
               onClick={() => onOpenDetail("translation-lang")}
             />
           )}
 
           {/* 各服务的配置行按所选服务条件渲染 */}
-          {translationEnabled && translationProvider === "deepseek" && rKey && (
+          {translationProvider === "deepseek" && rKey && (
             <NavigationRow
               label="DeepSeek API Key"
               value={deepSeekApiKey ? PROVIDER_VALUE_OK : "未配置"}
@@ -127,7 +124,7 @@ export default function ServicesSection({ query, sectionFilter, onOpenDetail }: 
               onClick={() => onOpenDetail("deepseek-key")}
             />
           )}
-          {translationEnabled && translationProvider === "openai" && rKey && (
+          {translationProvider === "openai" && rKey && (
             <NavigationRow
               label="ChatGPT API Key"
               value={openaiApiKey ? PROVIDER_VALUE_OK : "未配置"}
@@ -135,7 +132,7 @@ export default function ServicesSection({ query, sectionFilter, onOpenDetail }: 
               onClick={() => onOpenDetail("openai-key")}
             />
           )}
-          {translationEnabled && translationProvider === "custom" && rKey && (
+          {translationProvider === "custom" && rKey && (
             <NavigationRow
               label="自定义 API 配置"
               value={customConfigured ? PROVIDER_VALUE_OK : "未配置"}
@@ -145,7 +142,7 @@ export default function ServicesSection({ query, sectionFilter, onOpenDetail }: 
           )}
 
           {/* Google 免费翻译无需任何配置 */}
-          {translationEnabled && translationProvider === "google" && rKey && (
+          {translationProvider === "google" && rKey && (
             <Row label="API Key" description="Google 免费翻译无需配置">
               <span
                 className="sl-sp-nav-value-text"
@@ -156,12 +153,10 @@ export default function ServicesSection({ query, sectionFilter, onOpenDetail }: 
             </Row>
           )}
 
-          {rModel && translationEnabled && translationProvider !== "google" && (
+          {rModel && translationProvider !== "google" && (
             <NavigationRow
               label="翻译模型"
               value={modelValue}
-              disabled={!translationEnabled}
-              disabledReason="请先启用「歌词翻译」再修改此项"
               onClick={() => onOpenDetail("translation-model")}
             />
           )}

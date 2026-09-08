@@ -10,7 +10,11 @@ import { ApplyLineLyrics } from "../Applyer/Synced/Line.ts";
 import { ApplySyllableLyrics } from "../Applyer/Synced/Syllable.ts";
 import { ClearLyricsPageContainer } from "../fetchLyrics.ts";
 import { ClearLyricsContentArrays, isRomanized } from "../lyrics.ts";
-import { afterLyricsApply } from "../Translate/index.ts";
+import {
+  afterLyricsApply,
+  prepareLyricsForDisplay,
+  resetTranslationForTrack,
+} from "../Translate/index.ts";
 import { PageContainer } from "../../../components/Pages/PageView.ts";
 import { CleanUpIsByCommunity } from "../Applyer/Credits/ApplyIsByCommunity.tsx";
 import { IsCompactMode } from "../../../components/Utils/CompactMode.ts";
@@ -36,8 +40,8 @@ export default async function ApplyLyrics(
   setBlurringLastLine(null);
   if (!lyricsContent) return;
   const [descriptor] = lyricsContent;
+  const currentUri = SpotifyPlayer.GetUri();
   if (typeof descriptor !== "string") {
-    const currentUri = SpotifyPlayer.GetUri();
     const lyricsUri = (descriptor as LyricsData).uri;
     if (lyricsUri && currentUri && lyricsUri !== currentUri) return;
   }
@@ -108,6 +112,7 @@ export default async function ApplyLyrics(
   }
 
   if (noticeContent) {
+    resetTranslationForTrack(currentUri ?? "");
     $currentLyricsType.set("None");
 
     if (descriptor === "lyrics-not-found") {
@@ -146,7 +151,8 @@ export default async function ApplyLyrics(
     return;
   }
 
-  const lyrics = descriptor as LyricsData;
+  // 同步挂载后端/本地缓存译文，确保命中缓存时第一帧直接显示。
+  const lyrics = prepareLyricsForDisplay(currentUri ?? "", descriptor as LyricsData) as LyricsData;
   const romanize = isRomanized;
 
   if (lyrics.Type === "Syllable") {
@@ -158,6 +164,6 @@ export default async function ApplyLyrics(
     ApplyStaticLyrics(lyrics as StaticLyricsData, romanize);
   }
 
-  // 翻译钩子：翻译开启时后台翻译，完成后重新渲染
-  afterLyricsApply(SpotifyPlayer.GetUri() ?? "", lyrics);
+  // 仅发布当前显示模型；联网翻译只能由歌词页按钮显式触发。
+  afterLyricsApply(currentUri ?? "", lyrics);
 }

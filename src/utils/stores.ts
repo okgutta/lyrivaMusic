@@ -82,9 +82,7 @@ export const $timelineOutsideMediaContent = persistAtom<boolean>(
 export const $showVolumeSlider = persistAtom<boolean>("showVolumeSlider", true);
 // Playback timing offset in milliseconds (bipolar: negative = earlier, positive = later)
 export const $playbackOffset = persistAtom<number>("playbackOffset", 0);
-// 歌词翻译（多后端：google / deepseek / openai / custom）
-export const $translationEnabled = persistAtom<boolean>("translationEnabled", false);
-// 翻译服务选择（默认 deepseek，老用户行为不变）
+// 歌词翻译服务（已有译文自动显示，缺失译文只在歌词页按需翻译）
 export const $translationProvider = persistAtom<"google" | "deepseek" | "openai" | "custom">(
   "translationProvider",
   "deepseek"

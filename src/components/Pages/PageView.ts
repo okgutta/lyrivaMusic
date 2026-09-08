@@ -24,7 +24,6 @@ import {
   $showVolumeSlider,
   $simpleLyricsMode,
   $skipSpicyFont,
-  $translationEnabled,
   $ttmlMakerMode,
   $viewControlsPosition,
 } from "../../utils/stores.ts";
@@ -53,6 +52,11 @@ import { openSettingsPanel } from "../../utils/settings.ts";
 import Logger from "../../utils/Logger.ts";
 import { ApplyExperimentClasses, onExperimentChange } from "../../utils/experiments.ts";
 import { triggerRemeasureLV } from "../../utils/Lyrics/LyricsVirtualizer.ts";
+import {
+  $translationState,
+  requestTranslationToggle,
+  type TranslationState,
+} from "../../utils/Lyrics/Translate/state.ts";
 
 const pageLogger = new Logger("Page View");
 const controlsLogger = new Logger("View Controls");
@@ -385,6 +389,40 @@ Global.Event.listen(
   }
 );
 
+function translationControlPresentation(state: TranslationState) {
+  switch (state) {
+    case "partial":
+      return { label: "补全歌词翻译", icon: Icons.Translate, active: true, disabled: false };
+    case "translating":
+      return { label: "正在翻译歌词", icon: Icons.Translate, active: true, disabled: true };
+    case "complete":
+      return { label: "隐藏歌词翻译", icon: Icons.Translate, active: true, disabled: false };
+    case "hidden":
+      return { label: "显示歌词翻译", icon: Icons.TranslateOff, active: false, disabled: false };
+    case "error":
+      return { label: "重新翻译歌词", icon: Icons.TranslateOff, active: false, disabled: false };
+    default:
+      return { label: "翻译当前歌词", icon: Icons.TranslateOff, active: false, disabled: false };
+  }
+}
+
+function updateTranslationControl(): void {
+  const button = PageContainer?.querySelector<HTMLButtonElement>("#TranslateToggle");
+  if (!button) return;
+  const state = $translationState.get();
+  const presentation = translationControlPresentation(state);
+  button.innerHTML = presentation.icon;
+  button.classList.toggle("active", presentation.active);
+  button.classList.toggle("translating", state === "translating");
+  button.classList.toggle("error", state === "error");
+  button.disabled = presentation.disabled;
+  button.dataset.translationState = state;
+  button.setAttribute("aria-label", presentation.label);
+  button.setAttribute("aria-busy", String(state === "translating"));
+  button.setAttribute("aria-pressed", String(state === "partial" || state === "complete"));
+  Tooltips.Translate?.setContent(presentation.label);
+}
+
 function AppendViewControls(ReAppend: boolean = false) {
   if (IsCardMode) return;
   if (!PageContainer) return;
@@ -403,6 +441,8 @@ function AppendViewControls(ReAppend: boolean = false) {
 
   if (ReAppend) elem.innerHTML = "";
   const isNoLyrics = $currentLyricsData.get() === `NO_LYRICS:${SpotifyPlayer.GetUri()}`;
+  const translationState = $translationState.get();
+  const translationControl = translationControlPresentation(translationState);
   elem.innerHTML = `
         ${
           Fullscreen.IsOpen || Fullscreen.CinemaViewOpen
@@ -423,8 +463,14 @@ function AppendViewControls(ReAppend: boolean = false) {
         <button id="RomanizationToggle" class="ViewControl">
           ${isRomanized ? Icons.DisableRomanization : Icons.EnableRomanization}
         </button>
-        <button id="TranslateToggle" class="ViewControl${$translationEnabled.get() ? " active" : ""}">
-          ${$translationEnabled.get() ? Icons.Translate : Icons.TranslateOff}
+        <button id="TranslateToggle" type="button"
+          class="ViewControl${translationControl.active ? " active" : ""}${translationState === "translating" ? " translating" : ""}${translationState === "error" ? " error" : ""}"
+          data-translation-state="${translationState}"
+          aria-label="${translationControl.label}"
+          aria-busy="${translationState === "translating"}"
+          aria-pressed="${translationState === "partial" || translationState === "complete"}"
+          ${translationControl.disabled ? "disabled" : ""}>
+          ${translationControl.icon}
         </button>
         ${
           !Fullscreen.IsOpen && !Fullscreen.CinemaViewOpen
@@ -578,30 +624,24 @@ function AppendViewControls(ReAppend: boolean = false) {
       }
     }
 
-    const translateToggle = elem.querySelector("#TranslateToggle");
+    const translateToggle = elem.querySelector<HTMLButtonElement>("#TranslateToggle");
     if (translateToggle) {
-      try {
-        if (!isPip) {
+      if (!isPip) {
+        try {
           Tooltips.Translate = Spicetify.Tippy(translateToggle, {
             ...Spicetify.TippyProps,
-            content: $translationEnabled.get() ? "关闭歌词翻译" : "启用歌词翻译",
+            content: translationControlPresentation($translationState.get()).label,
           });
+        } catch (err) {
+          controlsLogger.warn("Failed to setup Translate tooltip", err);
         }
-        translateToggle.addEventListener("click", () => {
-          const next = !$translationEnabled.get();
-          $translationEnabled.set(next);
-          const btn = elem.querySelector("#TranslateToggle");
-          if (btn) {
-            btn.innerHTML = next ? Icons.Translate : Icons.TranslateOff;
-            btn.classList.toggle("active", next);
-          }
-          if (Tooltips.Translate) {
-            Tooltips.Translate.setContent(next ? "关闭歌词翻译" : "启用歌词翻译");
-          }
-        });
-      } catch (err) {
-        controlsLogger.warn("Failed to setup Translate tooltip", err);
       }
+      translateToggle.addEventListener("click", () => {
+        void requestTranslationToggle().catch((error) => {
+          controlsLogger.error("Failed to toggle lyrics translation", error);
+        });
+      });
+      updateTranslationControl();
     }
 
     if (!Fullscreen.IsOpen && !Fullscreen.CinemaViewOpen) {
@@ -766,5 +806,7 @@ $ttmlMakerMode.listen(() => {
   if (!PageContainer) return;
   AppendViewControls(true);
 });
+
+$translationState.listen(() => updateTranslationControl());
 
 export default PageView;

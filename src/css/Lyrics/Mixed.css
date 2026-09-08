@@ -954,7 +954,41 @@
   opacity: 1;
 }
 
-/* ===== 翻译开关（#TranslateToggle）激活态 ===== */
+/* ===== 按需翻译按钮状态 ===== */
 #SpicyLyricsPage .ViewControls #TranslateToggle.active {
-  color: #1ed760;
+  color: var(--spice-text-positive, #1ed760);
+}
+
+#SpicyLyricsPage .ViewControls #TranslateToggle.error {
+  color: var(--spice-text-negative, #f15e6c);
+}
+
+#SpicyLyricsPage .ViewControls #TranslateToggle:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+#SpicyLyricsPage .ViewControls #TranslateToggle:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+#SpicyLyricsPage .ViewControls #TranslateToggle.translating svg {
+  animation: spicy-lyrics-translation-pulse 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes spicy-lyrics-translation-pulse {
+  from {
+    opacity: 0.45;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #SpicyLyricsPage .ViewControls #TranslateToggle.translating svg {
+    animation: none;
+    opacity: 0.72;
+  }
 }
