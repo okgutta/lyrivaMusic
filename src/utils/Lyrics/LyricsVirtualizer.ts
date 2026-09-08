@@ -935,11 +935,20 @@ class LyricsVirtualizer {
   }
 
   destroy(): void {
-    virtualizerLogger.info("Destroying lyrics virtualizer", {
-      mountedCount: this._mountedIndices.size,
-      wrappers: this._wrappers.length,
-      hasVirtualizer: Boolean(this._virtualizer),
-    });
+    const hasActiveState = Boolean(
+      this._virtualizer ||
+      this._maid ||
+      this._wrappers.length ||
+      this._mountedIndices.size ||
+      this._scrollEl
+    );
+    if (hasActiveState) {
+      virtualizerLogger.info("Destroying lyrics virtualizer", {
+        mountedCount: this._mountedIndices.size,
+        wrappers: this._wrappers.length,
+        hasVirtualizer: Boolean(this._virtualizer),
+      });
+    }
     if (this._scrollVerifyRAF !== null) {
       cancelAnimationFrame(this._scrollVerifyRAF);
       this._scrollVerifyRAF = null;

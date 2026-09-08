@@ -955,23 +955,23 @@
 }
 
 /* ===== 按需翻译按钮状态 ===== */
-#SpicyLyricsPage .ViewControls #TranslateToggle.translating {
-  color: var(--spice-text-positive, #1ed760);
+#SpicyLyricsPage .ViewControls #TranslateToggle.translation-loading {
+  color: var(--spice-text-positive, #1ed760) !important;
 }
 
 #SpicyLyricsPage .ViewControls #TranslateToggle.error {
-  color: var(--spice-text-negative, #f15e6c);
+  color: var(--spice-text-negative, #f15e6c) !important;
 }
 
 #SpicyLyricsPage .ViewControls #TranslateToggle:disabled {
   cursor: default;
-  color: inherit;
+  color: var(--color-text-primary, rgba(255, 255, 255, 0.92)) !important;
   opacity: 0.55;
 }
 
-#SpicyLyricsPage .ViewControls #TranslateToggle.translating:disabled {
+#SpicyLyricsPage .ViewControls #TranslateToggle.translation-loading:disabled {
   cursor: wait;
-  color: var(--spice-text-positive, #1ed760);
+  color: var(--spice-text-positive, #1ed760) !important;
   opacity: 0.75;
 }
 
@@ -980,7 +980,7 @@
   outline-offset: 2px;
 }
 
-#SpicyLyricsPage .ViewControls #TranslateToggle.translating svg {
+#SpicyLyricsPage .ViewControls #TranslateToggle.translation-loading svg {
   animation: spicy-lyrics-translation-pulse 0.9s ease-in-out infinite alternate;
 }
 
@@ -994,7 +994,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #SpicyLyricsPage .ViewControls #TranslateToggle.translating svg {
+  #SpicyLyricsPage .ViewControls #TranslateToggle.translation-loading svg {
     animation: none;
     opacity: 0.72;
   }

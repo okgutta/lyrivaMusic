@@ -163,10 +163,10 @@ export function GetExpireStore<ItemType>(
   const RemoveItem = async (itemName: string): Promise<void> => {
     try {
       const cache = await caches.open(storeName);
-      const ok = await cache.delete(requestUrl(itemName));
-      if (!ok) {
-        console.warn(`ExpireStore "${storeName}": item "${itemName}" not found on remove`);
-      }
+      // Cache deletion is intentionally idempotent. A concurrent cleanup may
+      // already have removed the entry; that is a successful final state, not
+      // a warning-worthy failure.
+      await cache.delete(requestUrl(itemName));
     } catch (err) {
       console.warn(`ExpireStore "${storeName}": error removing item "${itemName}"`, err);
       throw err;

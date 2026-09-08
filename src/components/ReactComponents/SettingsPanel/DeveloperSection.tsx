@@ -14,14 +14,14 @@ export default function DeveloperSection({ query, sectionFilter }: Props) {
 
   if (sectionFilter !== "All" && sectionFilter !== SECTION_NAME) return null;
 
-  const r1 = matches(query, "开发者模式", "启用额外的日志和调试工具。");
+  const r1 = matches(query, "开发者模式", "启用结构化控制台日志和调试工具。");
 
   if (!r1) return null;
 
   return (
     <Section title="开发者">
       {r1 && (
-        <Row label="开发者模式">
+        <Row label="开发者模式" description="在 DevTools 控制台输出结构化诊断信息">
           <Toggle checked={developerMode} onChange={(v) => $developerMode.set(v)} />
         </Row>
       )}

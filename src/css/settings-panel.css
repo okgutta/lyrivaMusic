@@ -1482,7 +1482,6 @@ sl-generic-modal.SpicyLyricsModal .slmodal-settingsPanel .slm.w-40 {
   .sl-sp-row {
     padding-inline: 14px;
   }
-
   .sl-sp-sidebar-nav {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

@@ -31,6 +31,7 @@ const escapeHtml = (value: string): string =>
 class _HTMLGenericModal extends HTMLElement {
   private _onClose: (() => void) | null;
   private _currentModalId: string | null;
+  private _returnFocus: HTMLElement | null;
   // Bumped on every hide()/display() so a pending hide's delayed removal
   // can detect that a newer display took over the element.
   private _hideToken: number;
@@ -40,6 +41,7 @@ class _HTMLGenericModal extends HTMLElement {
     this.classList.add("SpicyLyricsModal");
     this._onClose = null;
     this._currentModalId = null;
+    this._returnFocus = null;
     this._hideToken = 0;
   }
 
@@ -93,8 +95,10 @@ class _HTMLGenericModal extends HTMLElement {
   hide(): void {
     const token = ++this._hideToken;
     const capturedOnClose = this._onClose;
+    const returnFocus = this._returnFocus;
     this._onClose = null;
     this._currentModalId = null;
+    this._returnFocus = null;
     const _removeFromDom = (timeoutDuration: number) => {
       setTimeout(() => {
         // A display() that ran after this hide() started now owns the
@@ -103,6 +107,11 @@ class _HTMLGenericModal extends HTMLElement {
         // even when a new modal took over the element, or it leaks.
         if (token === this._hideToken) {
           this?.remove();
+          setTimeout(() => {
+            if (returnFocus?.isConnected && !returnFocus.closest("[inert]")) {
+              returnFocus.focus({ preventScroll: true });
+            }
+          }, 0);
         }
         if (typeof capturedOnClose === "function") {
           capturedOnClose();
@@ -178,6 +187,13 @@ class _HTMLGenericModal extends HTMLElement {
     // Invalidate any hide() removal still pending, so it can't remove this
     // freshly displayed modal.
     this._hideToken++;
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && !this.contains(activeElement)) {
+      this._returnFocus = activeElement;
+      // Spotify marks background surfaces aria-hidden/inert while a dialog is
+      // open. Release focus first so Chromium does not reject that transition.
+      activeElement.blur();
+    }
     // If a previous onClose exists, call it before displaying a new popup
     if (typeof this._onClose === "function") {
       this._onClose();

@@ -15,9 +15,15 @@ import {
   type MatchLevel,
   type TargetTrack,
 } from "./matcher.ts";
-import { tryLyrivaLyrics } from "./lyriva.ts";
+import { tryLyrivaLyrics, type LyrivaResult } from "./lyriva.ts";
 import { geniusProvider } from "./providers/genius.ts";
 import Global from "../../components/Global/Global.ts";
+import { PrefetchMissCache } from "./PrefetchMissCache.ts";
+import {
+  recordCacheDiagnostic,
+  recordCurrentDiagnostic,
+  recordLyrivaResult,
+} from "./diagnostics.ts";
 
 const lyricsLogger = new Logger("Lyrics Pipeline");
 const lyricsCacheLogger = new Logger("Lyrics Cache");
@@ -40,9 +46,15 @@ type InflightLyricsPrefetch = {
   promise: Promise<LyricsPrefetchResult>;
 };
 const inflightLyricsPrefetches = new Map<string, InflightLyricsPrefetch>();
+const recentLyrivaPrefetchMisses = new PrefetchMissCache();
 
 function isTrackUri(uri: string): boolean {
   return /^spotify:track:[^:]+$/.test(uri) || uri.startsWith("spotify:local:");
+}
+
+function trackLabel(target: TargetTrack): string {
+  const artists = target.artists.filter(Boolean).join(", ");
+  return artists ? `${target.title} — ${artists}` : target.title;
 }
 
 function isActiveRequest(gen: number, uri: string, signal?: AbortSignal): boolean {
@@ -289,9 +301,13 @@ async function prefetchLyricsInner(
     lyricsCacheLogger.debug("下一首歌词缓存检查失败，继续预取", error);
   }
 
+  const requestStartedAt = performance.now();
   const result = await tryLyrivaLyrics(target, signal);
+  const requestDuration = Math.round(performance.now() - requestStartedAt);
+  recordLyrivaResult(result, requestDuration, `预取 ${target.title}`);
   if (signal.aborted) return "aborted";
   if (result.kind === "ok") {
+    recentLyrivaPrefetchMisses.clear(target.uri);
     result.model.uri = target.uri;
     const persisted = await persistLyricsModel(result.model, trackId, target.uri);
     if (persisted) {
@@ -300,7 +316,10 @@ async function prefetchLyricsInner(
     }
     return "unavailable";
   }
-  if (result.kind === "not-found") return "miss";
+  if (result.kind === "not-found") {
+    recentLyrivaPrefetchMisses.remember(target.uri);
+    return "miss";
+  }
   return "unavailable";
 }
 
@@ -395,6 +414,12 @@ export default async function fetchLyrics(uri: string): Promise<[object | string
       // $currentlyFetching 停在 true 或 loader 一直转。降级为错误文案，
       // 而不是把未处理 rejection 留给调用方。
       lyricsLogger.error("Unexpected error while fetching lyrics", error);
+      recordCurrentDiagnostic({
+        level: "error",
+        title: "歌词获取异常",
+        detail: error instanceof Error ? error.message : String(error),
+        uri,
+      });
       $currentlyFetching.set(false);
       HideLoaderContainer();
       return ["unknown-error", 500];
@@ -463,6 +488,15 @@ async function fetchLyricsInner(
     return null;
   }
 
+  const label = trackLabel(target);
+  recordCurrentDiagnostic({
+    level: "working",
+    title: "正在获取歌词",
+    detail: "检查内存与本地缓存",
+    uri,
+    track: label,
+  });
+
   $currentlyFetching.set(true);
   if (LyricsContent) LyricsContent.classList.add("HiddenTransitioned");
 
@@ -475,6 +509,14 @@ async function fetchLyricsInner(
         if (savedUri === uri) {
           lyricsLogger.debug("NO_LYRICS 内存哨兵命中，跳过全部 Provider（清缓存后可重试）", uri);
           $currentlyFetching.set(false);
+          recordCurrentDiagnostic({
+            level: "warning",
+            title: "当前歌曲无歌词",
+            detail: "命中本次播放的无歌词记录",
+            source: "内存缓存",
+            uri,
+            track: label,
+          });
           return ["lyrics-not-found", 404];
         }
       } else {
@@ -486,6 +528,14 @@ async function fetchLyricsInner(
         ) {
           presentLyrics(parsed, uri, gen);
           scheduleLyricsFinalization(parsed, trackId, uri, gen, signal);
+          recordCurrentDiagnostic({
+            level: "success",
+            title: "歌词已就绪",
+            detail: "命中当前播放的内存缓存",
+            source: "内存缓存",
+            uri,
+            track: label,
+          });
           return [parsed, 200];
         }
       }
@@ -516,6 +566,14 @@ async function fetchLyricsInner(
         ) {
           lyricsCacheLogger.debug("NO_LYRICS 负缓存命中（身份一致）", trackId);
           $currentlyFetching.set(false);
+          recordCurrentDiagnostic({
+            level: "warning",
+            title: "当前歌曲无歌词",
+            detail: "命中本地无歌词缓存",
+            source: "本地缓存",
+            uri,
+            track: label,
+          });
           return ["lyrics-not-found", 404];
         }
         // 正缓存：必须已通过匹配（HIGH/GOOD）且身份一致
@@ -527,10 +585,25 @@ async function fetchLyricsInner(
               lyricsCacheLogger.warn("缓存模型结构损坏，删除并重新拉取", trackId);
               await LyricsStore.RemoveItem(trackId).catch(() => {});
               $currentLyricsData.set("");
+              recordCacheDiagnostic({
+                level: "warning",
+                title: "已清理损坏缓存",
+                detail: label,
+                uri,
+                track: label,
+              });
             } else {
               $currentLyricsData.set(JSON.stringify(model));
               presentLyrics(model, uri, gen);
               scheduleLyricsFinalization(model, trackId, uri, gen, signal);
+              recordCurrentDiagnostic({
+                level: "success",
+                title: "歌词已就绪",
+                detail: "命中本地持久缓存",
+                source: "本地缓存",
+                uri,
+                track: label,
+              });
               return [{ ...model, fromCache: true }, 200];
             }
           }
@@ -548,6 +621,13 @@ async function fetchLyricsInner(
 
   if (!navigator.onLine) {
     $currentlyFetching.set(false);
+    recordCurrentDiagnostic({
+      level: "warning",
+      title: "当前处于离线状态",
+      detail: "没有可用缓存，联网后可重试",
+      uri,
+      track: label,
+    });
     return ["offline", 400];
   }
 
@@ -555,9 +635,22 @@ async function fetchLyricsInner(
 
   // ===== 主源：LYRIVA API（完全替换内置多源搜索 → Matcher → 取词链） =====
   const requestStartedAt = performance.now();
-  const result = await tryLyrivaLyrics(target, signal);
+  let result: LyrivaResult;
+  const reusedPrefetchMiss = recentLyrivaPrefetchMisses.has(uri);
+  if (reusedPrefetchMiss) {
+    result = { kind: "not-found" };
+    lyricsLogger.debug("Reusing recent LYRIVA prefetch miss", uri);
+  } else {
+    result = await tryLyrivaLyrics(target, signal);
+  }
+  const requestDuration = Math.round(performance.now() - requestStartedAt);
+  recordLyrivaResult(
+    result,
+    requestDuration,
+    reusedPrefetchMiss ? `复用预取 ${target.title}` : `播放 ${target.title}`
+  );
   lyricsLogger.debug("LYRIVA request completed", {
-    durationMs: Math.round(performance.now() - requestStartedAt),
+    durationMs: requestDuration,
     kind: result.kind,
     uri,
   });
@@ -587,6 +680,15 @@ async function fetchLyricsInner(
     $currentLyricsData.set(JSON.stringify(model));
     presentLyrics(model, uri, gen);
     scheduleLyricsFinalization(model, trackId, uri, gen, signal);
+    recordCurrentDiagnostic({
+      level: "success",
+      title: "歌词已就绪",
+      detail: result.kind === "ok" ? "LYRIVA 返回有效歌词" : "LYRIVA 未命中，Genius 兜底成功",
+      source: result.kind === "ok" ? "LYRIVA" : "Genius",
+      durationMs: requestDuration,
+      uri,
+      track: label,
+    });
     return [{ ...model, fromCache: false }, 200];
   }
 
@@ -610,6 +712,15 @@ async function fetchLyricsInner(
     }
     HideLoaderContainer();
     $currentlyFetching.set(false);
+    recordCurrentDiagnostic({
+      level: "warning",
+      title: "当前歌曲无歌词",
+      detail: "LYRIVA 与 Genius 均未找到匹配歌词",
+      source: "歌词来源",
+      durationMs: requestDuration,
+      uri,
+      track: label,
+    });
     return ["lyrics-not-found", 404];
   }
 
@@ -625,6 +736,20 @@ async function fetchLyricsInner(
   }
   HideLoaderContainer();
   $currentlyFetching.set(false);
+  recordCurrentDiagnostic({
+    level: "error",
+    title: "歌词获取失败",
+    detail:
+      result.kind === "unavailable"
+        ? result.reason
+        : result.kind === "skipped"
+          ? "LYRIVA 服务未配置"
+          : "歌词来源暂时不可用",
+    source: "歌词来源",
+    durationMs: requestDuration,
+    uri,
+    track: label,
+  });
   return ["unknown-error", 500];
 }
 

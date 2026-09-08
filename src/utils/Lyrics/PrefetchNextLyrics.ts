@@ -2,6 +2,7 @@ import Logger from "../Logger.ts";
 import { $currentlyFetching } from "../stores.ts";
 import { prefetchLyrics, type LyricsPrefetchResult } from "./fetchLyrics.ts";
 import { findNextTrackTarget } from "./QueueTrackTarget.ts";
+import { recordPrefetchDiagnostic } from "./diagnostics.ts";
 
 const prefetchLogger = new Logger("Lyrics Prefetch");
 const QUEUE_POLL_INTERVAL_MS = 5_000;
@@ -35,11 +36,40 @@ async function runNextLyricsPrefetch(): Promise<void> {
     if (lastResult === "unavailable" && Date.now() < retryAfter) return;
   }
 
+  const track = `${target.title} — ${target.artists.join(", ")}`;
+  recordPrefetchDiagnostic({
+    level: "working",
+    title: "正在预取下一首",
+    detail: track,
+    uri: target.uri,
+    track,
+  });
+  const startedAt = performance.now();
   const result = await prefetchLyrics(target);
   if (result === "aborted") return;
+  const durationMs = Math.round(performance.now() - startedAt);
   lastTargetUri = target.uri;
   lastResult = result;
   retryAfter = result === "unavailable" ? Date.now() + UNAVAILABLE_RETRY_MS : 0;
+  const presentation: Record<
+    Exclude<LyricsPrefetchResult, "aborted">,
+    { level: "success" | "warning" | "error"; title: string; detail: string }
+  > = {
+    cached: { level: "success", title: "下一首已缓存", detail: "无需再次请求歌词服务" },
+    fetched: { level: "success", title: "下一首已预取", detail: "切歌时可直接读取本地缓存" },
+    miss: { level: "warning", title: "下一首无歌词", detail: "LYRIVA 未找到匹配歌词" },
+    unavailable: {
+      level: "error",
+      title: "预取暂不可用",
+      detail: "服务或网络异常，30 秒后自动重试",
+    },
+  };
+  recordPrefetchDiagnostic({
+    ...presentation[result],
+    durationMs,
+    uri: target.uri,
+    track,
+  });
   prefetchLogger.debug("下一首歌词预取完成", { uri: target.uri, result });
 }
 

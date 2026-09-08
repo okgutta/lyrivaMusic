@@ -28,6 +28,7 @@ import { isSameLanguage } from "./detect.ts";
 import {
   $translationState,
   registerTranslationToggleHandler,
+  settledTranslationState,
   type TranslationState,
 } from "./state.ts";
 
@@ -129,11 +130,6 @@ function sourceKey(uri: string, target: string, entries: TranslationEntry[]): st
   return `${uri}|${target}|${fingerprintSource(entries.map((entry) => entry.text))}`;
 }
 
-function stateForCount(count: number, total: number): TranslationState {
-  if (count <= 0 || total <= 0) return "none";
-  return count >= total ? "complete" : "partial";
-}
-
 function updateState(state: TranslationState): void {
   if ($translationState.get() !== state) $translationState.set(state);
 }
@@ -181,7 +177,7 @@ export function prepareLyricsForDisplay(uri: string, model: Model): Model {
     activeSourceKey = "";
     ownedIndexes = new Set();
     lastModel = model;
-    if (!inFlight || inFlightKey !== visibilityKey(uri)) updateState("none");
+    if (!inFlight || inFlightKey !== visibilityKey(uri)) updateState("unavailable");
     return model;
   }
 
@@ -195,25 +191,21 @@ export function prepareLyricsForDisplay(uri: string, model: Model): Model {
     (entry, index) => Boolean(values[index]) && inheritedOwned.has(entry.arrayIndex)
   );
   const hasNativeTranslation = values.some((value, index) => Boolean(value) && !valueOwned[index]);
+  const fingerprint = fingerprintSource(entries.map((entry) => entry.text));
+  const trackCache = values.some((value) => !value)
+    ? getReusableTrackCache(uri, target, fingerprint, entries.length)
+    : null;
+  const hasTrackTranslation = Boolean(
+    trackCache?.lines.some((line, index) => {
+      const value = line?.trim();
+      return Boolean(value && value !== entries[index]?.text);
+    })
+  );
 
-  if (values.some((value) => !value)) {
-    const fingerprint = fingerprintSource(entries.map((entry) => entry.text));
-    const trackCache = getReusableTrackCache(uri, target, fingerprint, entries.length);
+  if (hasTrackTranslation) {
     entries.forEach((entry, index) => {
       if (values[index]) return;
       const cached = trackCache?.lines[index]?.trim();
-      if (!cached || cached === entry.text) return;
-      values[index] = cached;
-      valueOwned[index] = true;
-    });
-  }
-
-  if (values.some((value) => !value)) {
-    // 整首缓存未命中的部分再查一次行级快照，整个过程只 JSON.parse 一次。
-    const lineCache = getCacheSnapshot();
-    entries.forEach((entry, index) => {
-      if (values[index]) return;
-      const cached = getCachedFromSnapshot(lineCache, entry.text, target);
       if (!cached || cached === entry.text) return;
       values[index] = cached;
       valueOwned[index] = true;
@@ -230,10 +222,20 @@ export function prepareLyricsForDisplay(uri: string, model: Model): Model {
   );
   lastModel = result;
 
-  if (!inFlight || inFlightKey !== visibilityKey(uri, target)) {
-    // LYRIVA 的译文会有意省略制作人员等非歌词行；只要后端带有有效译文，
-    // 就直接视为“已有翻译”，不要求用户再点击按钮补全这些署名信息。
-    updateState(hasNativeTranslation ? "complete" : stateForCount(availableCount, entries.length));
+  const preserveError = sameSource && $translationState.get() === "error";
+  if ((!inFlight || inFlightKey !== visibilityKey(uri, target)) && !preserveError) {
+    // 后端译文和整首缓存可能有意省略署名、拟声词或与原文相同的行。
+    // 这些仍代表整首已经处理完成，不再以“每行非空”强迫用户重复点击。
+    updateState(
+      settledTranslationState({
+        entryCount: entries.length,
+        translatedCount: availableCount,
+        hasNativeTranslation,
+        hasTrackCache: hasTrackTranslation,
+        sourceMatchesTarget:
+          isSameLanguage(model.LanguageISO2, target) || isSameLanguage(model.Language, target),
+      })
+    );
   }
   return result;
 }
@@ -251,7 +253,7 @@ export function resetTranslationForTrack(uri: string): void {
   activeSourceKey = "";
   ownedIndexes = new Set();
   lastModel = null;
-  updateState("none");
+  updateState("unavailable");
 }
 
 function notify(message: string, isError = false): void {
@@ -260,20 +262,6 @@ function notify(message: string, isError = false): void {
   } catch {
     // Spotify 页面卸载期间通知 API 可能不可用。
   }
-}
-
-function mergeMetrics(
-  current: TranslateMetrics | undefined,
-  next: TranslateMetrics
-): TranslateMetrics {
-  if (!current) return { ...next };
-  return {
-    apiCalls: current.apiCalls + next.apiCalls,
-    inputTokens: current.inputTokens + next.inputTokens,
-    outputTokens: current.outputTokens + next.outputTokens,
-    totalTokens: current.totalTokens + next.totalTokens,
-    failedChunks: current.failedChunks + next.failedChunks,
-  };
 }
 
 function providerMetadata(): { api: string; model?: string } {
@@ -296,7 +284,6 @@ function saveTrackCache(
   startedAt: number
 ): void {
   const values = entries.map((entry) => translationText(entry.item));
-  if (values.every((value) => !value)) return;
   try {
     const artists = SpotifyPlayer.GetArtists?.() ?? [];
     const metadata = providerMetadata();
@@ -334,13 +321,14 @@ async function translateMissingLines(uri: string, initialModel: Model): Promise<
   let model = prepareLyricsForDisplay(uri, initialModel);
   let entries = extractEntries(model);
   const currentState = $translationState.get();
-  if (currentState === "complete" || entries.length === 0) {
+  if (currentState !== "ready" && currentState !== "error") {
     publishModel(uri, model, true);
     return;
   }
 
   const target = getTargetLang();
   if (isSameLanguage(model.LanguageISO2, target) || isSameLanguage(model.Language, target)) {
+    updateState("unavailable");
     notify("原歌词已经是目标语言");
     return;
   }
@@ -349,60 +337,49 @@ async function translateMissingLines(uri: string, initialModel: Model): Promise<
     return;
   }
 
+  // 行级缓存只在用户点击后参与补齐，避免初次展示少量零散译文时让按钮语义变模糊。
+  const cachedValues = entries.map((entry) => translationText(entry.item));
+  const lineCache = getCacheSnapshot();
+  entries.forEach((entry, index) => {
+    if (cachedValues[index]) return;
+    const cached = getCachedFromSnapshot(lineCache, entry.text, target);
+    if (!cached || cached === entry.text) return;
+    cachedValues[index] = cached;
+    ownedIndexes.add(entry.arrayIndex);
+  });
+  model = applyTranslationValues(model, cachedValues);
+  entries = extractEntries(model);
+
   const missing = entries
     .map((entry, localIndex) => ({ entry, localIndex }))
     .filter(({ entry }) => !translationText(entry.item));
   if (missing.length === 0) {
+    saveTrackCache(uri, model, entries, undefined, Date.now());
     updateState("complete");
+    publishModel(uri, model, true);
     return;
   }
   if (!hasTranslationProviderConfig()) {
-    updateState(missing.length < entries.length ? "partial" : "error");
+    updateState("error");
     notify("歌词翻译：请先在设置中配置当前翻译服务", true);
     return;
   }
 
   inFlight = true;
   inFlightKey = visibilityKey(uri, target);
-  updateState("translating");
+  updateState("loading");
   const controller = new AbortController();
   currentAbort = controller;
   const generation = ++requestGeneration;
   const startedAt = Date.now();
-  let metrics: TranslateMetrics | undefined;
-  const resolved = new Map<number, string>();
 
-  const translateBatch = async (
-    items: Array<{ entry: TranslationEntry; localIndex: number }>
-  ): Promise<void> => {
-    if (items.length === 0) return;
+  try {
+    // Provider 内部已经按 chunk 并发并带退避重试；这里不再追加第二轮整批请求。
     const result = await translateLines(
-      items.map(({ entry }) => entry.text),
+      missing.map(({ entry }) => entry.text),
       target,
       controller.signal
     );
-    if (controller.signal.aborted || generation !== requestGeneration) return;
-    metrics = mergeMetrics(metrics, result.metrics);
-    const cacheEntries: Array<{ sourceLine: string; targetLang: string; translated: string }> = [];
-    result.lines.forEach((translated, index) => {
-      const item = items[index];
-      const value = translated?.trim();
-      if (!item || !value || value === item.entry.text) return;
-      resolved.set(item.localIndex, value);
-      cacheEntries.push({ sourceLine: item.entry.text, targetLang: target, translated: value });
-    });
-    setCachedTranslations(cacheEntries);
-  };
-
-  try {
-    await translateBatch(missing);
-    if (controller.signal.aborted || generation !== requestGeneration) return;
-
-    const stillMissing = missing.filter(({ localIndex }) => !resolved.has(localIndex));
-    if (metrics?.failedChunks && stillMissing.length > 0) {
-      translateLogger.warn(`首次翻译有失败，重试 ${stillMissing.length} 行`);
-      await translateBatch(stillMissing);
-    }
     if (
       controller.signal.aborted ||
       generation !== requestGeneration ||
@@ -412,32 +389,42 @@ async function translateMissingLines(uri: string, initialModel: Model): Promise<
     }
 
     const values = entries.map((entry) => translationText(entry.item));
-    resolved.forEach((value, localIndex) => {
-      values[localIndex] = value;
-      ownedIndexes.add(entries[localIndex].arrayIndex);
+    const cacheEntries: Array<{ sourceLine: string; targetLang: string; translated: string }> = [];
+    result.lines.forEach((translated, index) => {
+      const item = missing[index];
+      const value = translated?.trim();
+      if (!item || !value || value === item.entry.text) return;
+      values[item.localIndex] = value;
+      ownedIndexes.add(item.entry.arrayIndex);
+      cacheEntries.push({ sourceLine: item.entry.text, targetLang: target, translated: value });
     });
+    setCachedTranslations(cacheEntries);
+
     model = applyTranslationValues(model, values);
     entries = extractEntries(model);
     activeSourceKey = sourceKey(uri, target, entries);
-    publishModel(uri, model, true);
 
     const translatedCount = entries.filter((entry) => Boolean(translationText(entry.item))).length;
-    if (resolved.size > 0) saveTrackCache(uri, model, entries, metrics, startedAt);
-    if (translatedCount === entries.length) {
-      updateState("complete");
-    } else if (translatedCount > 0) {
-      updateState("partial");
-    } else {
+    if (result.metrics.failedChunks > 0 || translatedCount === 0) {
+      publishModel(uri, model, true);
       updateState("error");
-      notify("歌词翻译失败，请稍后重试", true);
+      notify(
+        result.metrics.failedChunks > 0
+          ? "部分歌词翻译失败，请点击按钮重试"
+          : "未获得有效歌词翻译，请点击按钮重试",
+        true
+      );
+      return;
     }
+
+    // 一次无失败的整首请求就是完成。译文与原文相同或被省略的行不应让按钮常亮。
+    saveTrackCache(uri, model, entries, result.metrics, startedAt);
+    updateState("complete");
+    publishModel(uri, model, true);
   } catch (error) {
     if (!controller.signal.aborted) {
       translateLogger.error("歌词翻译失败", error);
-      const translatedCount = extractEntries(model).filter((entry) =>
-        translationText(entry.item)
-      ).length;
-      updateState(translatedCount > 0 ? "partial" : "error");
+      updateState("error");
       notify("歌词翻译失败，请稍后重试", true);
     }
   } finally {
@@ -452,11 +439,18 @@ async function handleTranslationToggle(): Promise<void> {
   const model = currentModel();
   if (!uri || !model || inFlight) return;
 
-  if ($translationState.get() === "complete") return;
+  const state = $translationState.get();
+  if (state !== "ready" && state !== "error") return;
   await translateMissingLines(uri, model);
 }
 
 registerTranslationToggleHandler(handleTranslationToggle);
+
+// 切歌时立即回到中性状态，不能让上一首歌的绿色/错误状态在新歌词加载期间残留。
+Global.Event.listen("playback:songchange", (event: any) => {
+  const uri = event?.data?.item?.uri;
+  if (typeof uri === "string" && uri) resetTranslationForTrack(uri);
+});
 
 Global.Event.listen("lyrics:analyzed", ({ uri, lyrics }: { uri: string; lyrics: Model }) => {
   if (!uri || SpotifyPlayer.GetUri() !== uri) return;

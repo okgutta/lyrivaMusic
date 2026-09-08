@@ -19,7 +19,7 @@ const lyrivaLogger = new Logger("LYRIVA");
 // 地址与 API Key 随客户端分发，用户零配置。注意：Key 会进入产物 JS，
 // 泄漏面等于分发面——仅适合自有/可控的 LYRIVA 服务。
 const LYRIVA_BASE_URL = "https://api.lyriva.xyz";
-const LYRIVA_API_KEY = "lk_live_qyEfUVP9uBIvMkySntJOHiuCDXA49LfEzXO2QQgPhL0";
+const LYRIVA_API_KEY = "lk_live_VJPuGhJG4tYFvTbDPUy99HIf7kUWd-N_918HKHDKqGI";
 
 const TIMEOUT_MS = 15000;
 const DEFAULT_PROXY_TEMPLATE = "https://cors-proxy.spicetify.app/{url}";
