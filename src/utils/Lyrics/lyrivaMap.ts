@@ -1,10 +1,11 @@
 // LYRIVA 响应 → LyricsPayload 映射（纯函数，无 Spicetify/浏览器依赖，可直接 Node 单测）
 // 输入：LYRIVA /v1/lyrics 的 `data` 字段 + target；输出：Line/Static 歌词模型或 null（无词）。
-import { parseLrc, findNear } from "../ncm/parseLrc.ts";
+import { parseLrc } from "../ncm/parseLrc.ts";
 import { splitArtists, type LyricsPayload, type MatchLevel, type TargetTrack } from "./matcher.ts";
 
 /** 至少要有 3 行同步歌词才采信为 Line 模型，否则回退 Static（或视为无词） */
 const MIN_LINES = 3;
+const TRANSLATION_TIME_TOLERANCE_MS = 1500;
 
 /** meta.matchLevel → HIGH/GOOD。缓存命中时可能缺失 matchLevel，此时用 qualityScore（0-100）兜底。 */
 export function metaToLevel(meta: any): MatchLevel {
@@ -29,26 +30,121 @@ export function confidenceOf(meta: any): number {
   return 0;
 }
 
-/** translation 字段：LRC（含时间戳）→ 按时间对齐；否则按行序兜底。 */
+function translationText(raw: unknown): string {
+  if (typeof raw === "string") return raw.trim();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "";
+  const value = raw as Record<string, unknown>;
+  for (const key of ["text", "translation", "translatedText", "lyric", "content"]) {
+    if (typeof value[key] === "string") return value[key].trim();
+  }
+  return "";
+}
+
+function unwrapTranslation(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const value = raw as Record<string, unknown>;
+  for (const key of [
+    "lines",
+    "translations",
+    "translation",
+    "syncedLyrics",
+    "lyric",
+    "text",
+    "content",
+  ]) {
+    if (value[key] !== undefined && value[key] !== raw) return value[key];
+  }
+  return raw;
+}
+
+function timedArrayRows(raw: unknown[]): Array<{ t: number; text: string }> {
+  return raw
+    .map((item) => {
+      const value = item && typeof item === "object" ? (item as Record<string, unknown>) : null;
+      const time = Number(value?.startMs ?? value?.timeMs ?? value?.timestampMs);
+      return { t: time, text: translationText(item) };
+    })
+    .filter((row) => Number.isFinite(row.t) && row.t >= 0 && Boolean(row.text))
+    .sort((a, b) => a.t - b.t);
+}
+
+/**
+ * 把每条时间译文最多分配给一条原文。LYRIVA 的译文可能省略伴唱、重复句等行，
+ * 因而不能让多条相邻原文各自查找同一个最近译文，否则放宽容差后会显示重复译文。
+ */
+function alignTimedTranslations(
+  rows: Array<{ t: number; text: string }>,
+  rowStartMs: number[]
+): string[] {
+  const result = rowStartMs.map(() => "");
+  const candidates: Array<{ rowIndex: number; sourceIndex: number; distance: number }> = [];
+  rows.forEach((row, rowIndex) => {
+    rowStartMs.forEach((startMs, sourceIndex) => {
+      const distance = Math.abs(startMs - row.t);
+      if (distance <= TRANSLATION_TIME_TOLERANCE_MS) {
+        candidates.push({ rowIndex, sourceIndex, distance });
+      }
+    });
+  });
+  candidates.sort((a, b) => a.distance - b.distance);
+
+  const usedRows = new Set<number>();
+  const usedSources = new Set<number>();
+  for (const candidate of candidates) {
+    if (usedRows.has(candidate.rowIndex) || usedSources.has(candidate.sourceIndex)) continue;
+    result[candidate.sourceIndex] = rows[candidate.rowIndex].text;
+    usedRows.add(candidate.rowIndex);
+    usedSources.add(candidate.sourceIndex);
+  }
+
+  return result;
+}
+
+/** translation 字段：LRC/结构化时间行按时间对齐；否则按行序兜底。 */
 export function mapTranslations(raw: unknown, rowStartMs: number[]): string[] {
   const empty = rowStartMs.map(() => "");
-  if (!raw) return empty;
-  if (typeof raw === "string") {
-    const s = raw.trim();
+  const value = unwrapTranslation(raw);
+  if (!value) return empty;
+  if (typeof value === "string") {
+    const s = value.trim();
     if (!s) return empty;
-    // 含 [mm:ss...] 时间戳 → LRC
-    if (/\[\d{1,3}:\d{1,2}(?:[.:]\d{1,3})?]/.test(s)) {
-      const rows = parseLrc(s);
-      return rowStartMs.map((t) => findNear(rows, t));
+    const rows = parseLrc(s).filter((row) => Boolean(row.text));
+    if (rows.length > 0) {
+      return alignTimedTranslations(rows, rowStartMs);
     }
-    // 纯文本：按行序对齐
-    const lines = s.split(/\r?\n/).map((l) => l.trim());
+    const lines = s
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
     return rowStartMs.map((_, i) => lines[i] ?? "");
   }
-  if (Array.isArray(raw)) {
-    return rowStartMs.map((_, i) => String(raw[i] ?? "").trim());
+  if (Array.isArray(value)) {
+    const timedRows = timedArrayRows(value);
+    if (timedRows.length > 0) {
+      return alignTimedTranslations(timedRows, rowStartMs);
+    }
+    return rowStartMs.map((_, i) => translationText(value[i]));
   }
   return empty;
+}
+
+/** Static 歌词没有时间轴：LRC 取译文行序，纯文本/数组同样按行序挂载。 */
+export function mapStaticTranslations(raw: unknown, lineCount: number): string[] {
+  const value = unwrapTranslation(raw);
+  let lines: string[] = [];
+  if (typeof value === "string") {
+    const timedRows = parseLrc(value).filter((row) => Boolean(row.text));
+    lines = timedRows.length
+      ? timedRows.map((row) => row.text)
+      : value
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+  } else if (Array.isArray(value)) {
+    const timedRows = timedArrayRows(value);
+    lines = timedRows.length ? timedRows.map((row) => row.text) : value.map(translationText);
+  }
+  return Array.from({ length: lineCount }, (_, index) => lines[index] ?? "");
 }
 
 /**
@@ -144,9 +240,13 @@ export function buildLyrivaModel(
   }
 
   // 同步歌词不足 → Static 模型（纯文本行）
+  const translations = mapStaticTranslations(data?.translation, plainLines.length);
   return {
     Type: "Static",
-    Lines: plainLines.map((t: string) => ({ Text: t })),
+    Lines: plainLines.map((text: string, index: number) => ({
+      Text: text,
+      ...(translations[index] ? { Translation: translations[index] } : {}),
+    })),
     uri: target.uri,
     source: "lyriva",
     matchInfo,

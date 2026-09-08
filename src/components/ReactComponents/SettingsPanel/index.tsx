@@ -39,7 +39,7 @@ const SECTIONS = [
   {
     value: "lyrics-service",
     label: "歌词翻译",
-    desc: "翻译开关、服务与目标语言",
+    desc: "缺失译文时使用的翻译服务与目标语言",
   },
   {
     value: "playback",

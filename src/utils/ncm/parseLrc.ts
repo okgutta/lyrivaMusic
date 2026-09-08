@@ -13,7 +13,7 @@ export function parseLrc(txt = ""): LrcRow[] {
       const line = String(lineRaw || "").trim();
       if (!line) return [];
       // 一行多时间戳：[00:10.00][00:20.00]text → 每个时间点一条
-      const tsRe = /\[(\d{2}):(\d{2})(?:[.:](\d{2,3}))?]/g;
+      const tsRe = /\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?]/g;
       const tsMatches = line.startsWith("[") ? [...line.matchAll(tsRe)] : [];
       if (tsMatches.length) {
         const text = line.replace(tsRe, "").trim();
@@ -21,7 +21,7 @@ export function parseLrc(txt = ""): LrcRow[] {
           const mm = m[1];
           const ss = m[2];
           const ff = m[3] ?? "0";
-          const sub = ff.length === 3 ? +ff : +ff * 10;
+          const sub = ff.length === 3 ? +ff : ff.length === 2 ? +ff * 10 : +ff * 100;
           const t = +mm * 60000 + +ss * 1000 + sub;
           return { t, text };
         });
@@ -46,7 +46,7 @@ export function parseLrc(txt = ""): LrcRow[] {
     .sort((a, b) => a.t - b.t);
 }
 
-/** 二分查找时间戳最接近的翻译行（容差 600ms），与网页脚本 findNear 等价 */
+/** 二分查找时间戳最接近的歌词行；调用方可按数据源指定容差。 */
 export function findNear(arr: LrcRow[], t: number, tol = 600): string {
   if (!arr || arr.length === 0) return "";
   let lo = 0;

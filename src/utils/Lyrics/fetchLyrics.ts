@@ -58,10 +58,10 @@ export type LyricsCacheEntry = {
 };
 
 // 缓存 Key 至少考虑 track identity + title/artist（见 matchInfo 校验）。
-// g2 → g3：失效因顶层 meta 解包错误而误写的 NO_LYRICS 负缓存。
+// g3 → g4：失效旧版映射器写入的无译文模型，使 LYRIVA 自带译文能重新拉取并自动显示。
 export const LyricsStore = GetExpireStore<LyricsCacheEntry>(
-  "SpicyLyrics_LyricsStore_g3",
-  3,
+  "SpicyLyrics_LyricsStore_g4",
+  4,
   { Unit: "Days", Duration: 3 },
   isDev as true
 );

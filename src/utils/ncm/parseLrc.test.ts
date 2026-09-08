@@ -33,6 +33,11 @@ function check(name: string, cond: boolean, detail?: unknown): void {
   check("毫秒(3位)", rows.length === 1 && rows[0].t === 65_123, rows);
 }
 
+{
+  const rows = parseLrc("[1:5.5]short");
+  check("非补零时间戳 + 十分秒", rows.length === 1 && rows[0].t === 65_500, rows);
+}
+
 // ── parseLrc：多时间戳一行 ──────────────────────────────────────────────────
 {
   const rows = parseLrc("[00:10.00][00:20.00]chorus");

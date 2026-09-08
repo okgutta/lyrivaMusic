@@ -396,9 +396,7 @@ function translationControlPresentation(state: TranslationState) {
     case "translating":
       return { label: "正在翻译歌词", icon: Icons.Translate, active: true, disabled: true };
     case "complete":
-      return { label: "隐藏歌词翻译", icon: Icons.Translate, active: true, disabled: false };
-    case "hidden":
-      return { label: "显示歌词翻译", icon: Icons.TranslateOff, active: false, disabled: false };
+      return { label: "已有歌词翻译", icon: Icons.Translate, active: true, disabled: true };
     case "error":
       return { label: "重新翻译歌词", icon: Icons.TranslateOff, active: false, disabled: false };
     default:

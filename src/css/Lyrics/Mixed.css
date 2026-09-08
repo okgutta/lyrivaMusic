@@ -964,6 +964,10 @@
 }
 
 #SpicyLyricsPage .ViewControls #TranslateToggle:disabled {
+  cursor: default;
+}
+
+#SpicyLyricsPage .ViewControls #TranslateToggle.translating:disabled {
   cursor: wait;
   opacity: 0.68;
 }

@@ -2,7 +2,6 @@
  * 歌词翻译编排：
  *  - 后端译文、整首缓存和行级缓存会在首次渲染前同步挂载，不产生网络请求；
  *  - 只有用户点击歌词页翻译按钮时才请求翻译服务，并且只补齐缺失行；
- *  - 完整译文可临时隐藏，再次显示不会删除缓存或重新请求；
  *  - 目标语言变化只读取对应缓存，不自动消耗翻译额度。
  */
 import Logger from "../../Logger.ts";
@@ -42,11 +41,6 @@ interface TranslationEntry {
   arrayIndex: number;
 }
 
-interface SavedTranslation {
-  text: string;
-  owned: boolean;
-}
-
 let activeUri: string | null = null;
 let activeSourceKey = "";
 let ownedIndexes = new Set<number>();
@@ -56,10 +50,6 @@ let inFlightKey = "";
 let currentAbort: AbortController | null = null;
 let requestGeneration = 0;
 let observedTargetLang = getTargetLang();
-
-// 隐藏状态按歌曲和目标语言隔离；译文快照还包含歌词指纹，避免版本变化后串行。
-const hiddenKeys = new Set<string>();
-const sessionTranslations = new Map<string, Map<number, SavedTranslation>>();
 
 function getTargetLang(): string {
   return $translationTargetLang.get() || "zh-CN";
@@ -199,27 +189,12 @@ export function prepareLyricsForDisplay(uri: string, model: Model): Model {
   const nextSourceKey = sourceKey(uri, target, entries);
   const sameSource = nextSourceKey === activeSourceKey;
   const inheritedOwned = sameSource ? ownedIndexes : new Set<number>();
-  const acceptsBackendTranslation = target.toLowerCase().startsWith("zh");
-  const values = entries.map((entry) => {
-    const value = translationText(entry.item);
-    if (acceptsBackendTranslation || inheritedOwned.has(entry.arrayIndex)) return value;
-    return "";
-  });
+  // 后端自带译文永远优先自动显示；目标语言只约束用户主动发起的翻译。
+  const values = entries.map((entry) => translationText(entry.item));
   const valueOwned = entries.map(
     (entry, index) => Boolean(values[index]) && inheritedOwned.has(entry.arrayIndex)
   );
-
-  if (values.some((value) => !value)) {
-    // 会话快照优先于落盘缓存，可恢复尚未完整、因而只有行级缓存的结果。
-    const saved = sessionTranslations.get(nextSourceKey);
-    entries.forEach((entry, index) => {
-      if (values[index]) return;
-      const snapshot = saved?.get(entry.arrayIndex);
-      if (!snapshot?.text) return;
-      values[index] = snapshot.text;
-      valueOwned[index] = snapshot.owned;
-    });
-  }
+  const hasNativeTranslation = values.some((value, index) => Boolean(value) && !valueOwned[index]);
 
   if (values.some((value) => !value)) {
     const fingerprint = fingerprintSource(entries.map((entry) => entry.text));
@@ -246,32 +221,19 @@ export function prepareLyricsForDisplay(uri: string, model: Model): Model {
   }
 
   const availableCount = values.filter(Boolean).length;
-  const isHidden = hiddenKeys.has(visibilityKey(uri, target)) && availableCount > 0;
-  if (isHidden) {
-    const snapshot = new Map<number, SavedTranslation>();
-    entries.forEach((entry, index) => {
-      if (values[index]) {
-        snapshot.set(entry.arrayIndex, { text: values[index], owned: valueOwned[index] });
-      }
-    });
-    sessionTranslations.set(nextSourceKey, snapshot);
-  } else if (availableCount === 0) {
-    // 歌词版本改变且已经没有可恢复译文时，不保留无意义的隐藏状态。
-    hiddenKeys.delete(visibilityKey(uri, target));
-  }
-
-  const displayValues = isHidden ? values.map(() => "") : values;
-  const result = applyTranslationValues(model, displayValues);
+  const result = applyTranslationValues(model, values);
   activeSourceKey = nextSourceKey;
   ownedIndexes = new Set(
     entries
-      .filter((_, index) => !isHidden && Boolean(displayValues[index]) && valueOwned[index])
+      .filter((_, index) => Boolean(values[index]) && valueOwned[index])
       .map((entry) => entry.arrayIndex)
   );
   lastModel = result;
 
   if (!inFlight || inFlightKey !== visibilityKey(uri, target)) {
-    updateState(isHidden ? "hidden" : stateForCount(availableCount, entries.length));
+    // LYRIVA 的译文会有意省略制作人员等非歌词行；只要后端带有有效译文，
+    // 就直接视为“已有翻译”，不要求用户再点击按钮补全这些署名信息。
+    updateState(hasNativeTranslation ? "complete" : stateForCount(availableCount, entries.length));
   }
   return result;
 }
@@ -326,7 +288,7 @@ function providerMetadata(): { api: string; model?: string } {
   return { api: "deepseek", model: $deepSeekModel.get() || "deepseek-chat" };
 }
 
-function saveCompleteTrackCache(
+function saveTrackCache(
   uri: string,
   model: Model,
   entries: TranslationEntry[],
@@ -334,7 +296,7 @@ function saveCompleteTrackCache(
   startedAt: number
 ): void {
   const values = entries.map((entry) => translationText(entry.item));
-  if (values.some((value) => !value)) return;
+  if (values.every((value) => !value)) return;
   try {
     const artists = SpotifyPlayer.GetArtists?.() ?? [];
     const metadata = providerMetadata();
@@ -372,8 +334,8 @@ async function translateMissingLines(uri: string, initialModel: Model): Promise<
   let model = prepareLyricsForDisplay(uri, initialModel);
   let entries = extractEntries(model);
   const currentState = $translationState.get();
-  if (currentState === "complete" || currentState === "hidden" || entries.length === 0) {
-    publishModel(uri, model, currentState !== "hidden");
+  if (currentState === "complete" || entries.length === 0) {
+    publishModel(uri, model, true);
     return;
   }
 
@@ -460,8 +422,8 @@ async function translateMissingLines(uri: string, initialModel: Model): Promise<
     publishModel(uri, model, true);
 
     const translatedCount = entries.filter((entry) => Boolean(translationText(entry.item))).length;
+    if (resolved.size > 0) saveTrackCache(uri, model, entries, metrics, startedAt);
     if (translatedCount === entries.length) {
-      saveCompleteTrackCache(uri, model, entries, metrics, startedAt);
       updateState("complete");
     } else if (translatedCount > 0) {
       updateState("partial");
@@ -485,31 +447,13 @@ async function translateMissingLines(uri: string, initialModel: Model): Promise<
   }
 }
 
-function hideCurrentTranslation(uri: string, model: Model): void {
-  hiddenKeys.add(visibilityKey(uri));
-  const prepared = prepareLyricsForDisplay(uri, model);
-  publishModel(uri, prepared, true);
-}
-
-function showCurrentTranslation(uri: string, model: Model): void {
-  hiddenKeys.delete(visibilityKey(uri));
-  const prepared = prepareLyricsForDisplay(uri, model);
-  publishModel(uri, prepared, true);
-}
-
 async function handleTranslationToggle(): Promise<void> {
   const uri = SpotifyPlayer.GetUri();
   const model = currentModel();
   if (!uri || !model || inFlight) return;
 
-  const state = $translationState.get();
-  if (state === "hidden") {
-    showCurrentTranslation(uri, model);
-  } else if (state === "complete") {
-    hideCurrentTranslation(uri, model);
-  } else {
-    await translateMissingLines(uri, model);
-  }
+  if ($translationState.get() === "complete") return;
+  await translateMissingLines(uri, model);
 }
 
 registerTranslationToggleHandler(handleTranslationToggle);
@@ -524,11 +468,8 @@ Global.Event.listen("lyrics:analyzed", ({ uri, lyrics }: { uri: string; lyrics: 
 function withoutOwnedTranslations(model: Model): Model {
   const entries = extractEntries(model);
   const values = entries.map((entry) => translationText(entry.item));
-  const saved = sessionTranslations.get(activeSourceKey);
   entries.forEach((entry, index) => {
     if (ownedIndexes.has(entry.arrayIndex)) values[index] = "";
-    const native = saved?.get(entry.arrayIndex);
-    if (native && !native.owned) values[index] = native.text;
   });
   return applyTranslationValues(model, values);
 }

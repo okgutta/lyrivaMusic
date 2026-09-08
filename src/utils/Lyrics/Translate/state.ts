@@ -1,6 +1,6 @@
 import { atom } from "nanostores";
 
-export type TranslationState = "none" | "partial" | "translating" | "complete" | "hidden" | "error";
+export type TranslationState = "none" | "partial" | "translating" | "complete" | "error";
 
 export const $translationState = atom<TranslationState>("none");
 

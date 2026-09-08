@@ -3,6 +3,7 @@
 import {
   buildLyrivaModel,
   buildLyrivaModelFromResponse,
+  mapStaticTranslations,
   mapTranslations,
   metaToLevel,
   confidenceOf,
@@ -157,18 +158,56 @@ const target: TargetTrack = {
   );
 }
 
+// ── mapTranslations：结构化译文数组 ──────────────────────────────────────────
+{
+  const got = mapTranslations(
+    {
+      lines: [
+        { startMs: 5100, translatedText: "一" },
+        { startMs: 11100, translatedText: "二" },
+        { startMs: 14900, translatedText: "三" },
+      ],
+    },
+    [5000, 10000, 15000]
+  );
+  check("结构化译文数组按时间对齐", got[0] === "一" && got[1] === "二" && got[2] === "三", got);
+}
+
+{
+  const got = mapTranslations("[00:05.00]一\n[00:10.00]二", [5000, 6000, 10000]);
+  check(
+    "同一条时间译文不会复制给邻近原文",
+    got[0] === "一" && got[1] === "" && got[2] === "二",
+    got
+  );
+}
+
+// ── mapStaticTranslations：纯文本与 LRC 都按有效译文行序挂载 ────────────────
+{
+  const plain = mapStaticTranslations("译文一\n译文二\n译文三", 3);
+  check("Static 纯文本译文", plain[0] === "译文一" && plain[2] === "译文三", plain);
+
+  const lrc = mapStaticTranslations(
+    "[00:05.00]时间译文一\n[00:10.00]时间译文二\n[00:15.00]时间译文三",
+    3
+  );
+  check("Static LRC 译文", lrc[0] === "时间译文一" && lrc[2] === "时间译文三", lrc);
+}
+
 // ── Static 模型：syncedLyrics 不足、plainLyrics 充足 ─────────────────────────
 {
   const data = {
     track: { title: "晴天", artist: "周杰伦" },
     plainLyrics: "第一行\n第二行\n第三行",
     syncedLyrics: [{ startMs: 5000, text: "only one" }],
+    translation: "翻译一\n翻译二\n翻译三",
     meta: { matchLevel: "HIGH_CONFIDENCE", matchScore: 0.98 },
   };
   const model = buildLyrivaModel(data, target);
   check("Static 模型类型", model?.Type === "Static", model?.Type);
   check("Static 行数", model?.Lines?.length === 3, model?.Lines?.length);
   check("Static 首行文本", model?.Lines?.[0]?.Text === "第一行", model?.Lines?.[0]?.Text);
+  check("Static 自带译文自动挂载", model?.Lines?.[1]?.Translation === "翻译二", model?.Lines);
 }
 
 // ── 无词：两者都不足 → null ──────────────────────────────────────────────────
