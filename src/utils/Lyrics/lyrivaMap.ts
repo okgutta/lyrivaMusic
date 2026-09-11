@@ -1,5 +1,5 @@
 // LYRIVA 响应 → LyricsPayload 映射（纯函数，无 Spicetify/浏览器依赖，可直接 Node 单测）
-// 输入：LYRIVA /v1/lyrics 的 `data` 字段 + target；输出：Line/Static 歌词模型或 null（无词）。
+// 输入：LYRIVA Unified API 的 `data` 字段 + target；输出：Line/Static 歌词模型或 null（无词）。
 import { parseLrc } from "../ncm/parseLrc.ts";
 import { splitArtists, type LyricsPayload, type MatchLevel, type TargetTrack } from "./matcher.ts";
 
@@ -149,7 +149,7 @@ export function mapStaticTranslations(raw: unknown, lineCount: number): string[]
 
 /**
  * LYRIVA 完整响应 → LyricsPayload。
- * `/v1/lyrics` 把匹配信息放在与 `data` 同级的 `meta` 中。
+ * Unified API 把匹配信息放在与 `data` 同级的 `meta` 中。
  */
 export function buildLyrivaModelFromResponse(
   response: any,

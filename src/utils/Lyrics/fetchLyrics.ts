@@ -728,7 +728,7 @@ async function fetchLyricsInner(
   // 不写负缓存：下首歌或重试仍有机会成功（避免把瞬时故障固化为「无歌词」）。
   // Genius 兜底也未命中才会走到这里。
   if (result.kind === "skipped") {
-    lyricsLogger.warn("LYRIVA 内置 API Key 为空，自动歌词获取跳过");
+    lyricsLogger.warn("LYRIVA API Key 未配置，自动歌词获取跳过");
   } else if (result.kind === "unavailable") {
     lyricsLogger.warn(`LYRIVA 不可用：${result.reason}`);
   } else {

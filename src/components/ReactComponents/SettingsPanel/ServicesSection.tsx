@@ -6,6 +6,7 @@ import {
   $deepSeekApiKey,
   $deepSeekModel,
   $geniusApiToken,
+  $lyrivaApiKey,
   $openaiApiKey,
   $openaiModel,
   $translationProvider,
@@ -40,6 +41,7 @@ const PROVIDER_LABELS = ["Google 翻译", "DeepSeek", "ChatGPT", "自定义 API"
 const PROVIDER_VALUE_OK = "已配置";
 
 type DetailId =
+  | "lyriva-key"
   | "genius-token"
   | "translation-lang"
   | "deepseek-key"
@@ -59,6 +61,7 @@ export default function ServicesSection({ query, sectionFilter, onOpenDetail }: 
   const deepSeekApiKey = useStore($deepSeekApiKey);
   const openaiApiKey = useStore($openaiApiKey);
   const geniusApiToken = useStore($geniusApiToken);
+  const lyrivaApiKey = useStore($lyrivaApiKey);
   const customConfigured = Boolean(
     $customApiBaseUrl.get() && $customApiKey.get() && $customApiModel.get()
   );
@@ -66,7 +69,9 @@ export default function ServicesSection({ query, sectionFilter, onOpenDetail }: 
   if (sectionFilter !== "All" && sectionFilter !== SECTION_NAME) return null;
 
   const r1 = matches(query, "自动显示歌词翻译", "已有译文自动显示，无译文时按需翻译");
-  const rSource = matches(query, "Genius API Token", "Genius 歌词来源 LYRIVA 未命中时自动兜底");
+  const rSource =
+    matches(query, "Lyriva API Key", "Unified API 歌词主源") ||
+    matches(query, "Genius API Token", "Genius 歌词来源 Lyriva 未命中时自动兜底");
   const rService = matches(query, "翻译服务", "Google DeepSeek ChatGPT 自定义");
   const r2 = matches(query, "翻译目标语言", "歌词翻译成哪种语言");
   const rKey =
@@ -112,11 +117,18 @@ export default function ServicesSection({ query, sectionFilter, onOpenDetail }: 
       {rSource && (
         <Section
           title="歌词来源"
-          description="LYRIVA 是内置主源；Genius 只在主源未命中时提供静态歌词。"
+          description="Lyriva Unified API 是主源；Genius 只在主源未命中时提供静态歌词。"
         >
           <NavigationRow
+            label="Lyriva API Key"
+            description="启用 Lyriva Unified API 歌词服务"
+            value={lyrivaApiKey ? "已配置" : "未配置"}
+            valueState={lyrivaApiKey ? "ok" : "unset"}
+            onClick={() => onOpenDetail("lyriva-key")}
+          />
+          <NavigationRow
             label="Genius API Token"
-            description="LYRIVA 未命中时自动使用 Genius 静态歌词"
+            description="Lyriva 未命中时自动使用 Genius 静态歌词"
             value={geniusApiToken ? "已配置" : "未配置"}
             valueState={geniusApiToken ? "ok" : "unset"}
             onClick={() => onOpenDetail("genius-token")}

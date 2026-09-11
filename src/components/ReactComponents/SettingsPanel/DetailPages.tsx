@@ -10,6 +10,7 @@ import {
   $deepSeekModelsError,
   $deepSeekModelsLoading,
   $geniusApiToken,
+  $lyrivaApiKey,
   $openaiApiKey,
   $openaiModel,
   $translationProvider,
@@ -91,6 +92,58 @@ function notify(message: string): void {
   } catch {
     /* ignore */
   }
+}
+
+export function DetailLyrivaApiKey({ onBack }: { onBack: () => void }) {
+  const lyrivaApiKey = useStore($lyrivaApiKey);
+  const [draft, setDraft] = useState(lyrivaApiKey);
+  const normalizedDraft = draft.trim();
+  const dirty = normalizedDraft !== lyrivaApiKey;
+
+  return (
+    <DetailShell
+      title="Lyriva API Key"
+      onBack={onBack}
+      actions={
+        <DetailActionBar dirty={dirty} configured={Boolean(lyrivaApiKey)}>
+          <button
+            type="button"
+            className="sl-sp-btn sl-sp-btn--primary"
+            disabled={!normalizedDraft || !dirty}
+            onClick={() => {
+              $lyrivaApiKey.set(normalizedDraft);
+              setDraft(normalizedDraft);
+              notify("已保存 Lyriva API Key");
+            }}
+          >
+            保存
+          </button>
+          <button
+            type="button"
+            className="sl-sp-btn"
+            disabled={!lyrivaApiKey && !draft}
+            onClick={() => {
+              $lyrivaApiKey.set("");
+              setDraft("");
+              notify("已清除 Lyriva API Key");
+            }}
+          >
+            清除 API Key
+          </button>
+        </DetailActionBar>
+      }
+    >
+      <Section description="密钥保存在本机 Spicetify 设置中，不会写入插件构建产物。请求优先直连；服务端未允许 Spotify CORS 时回退到 Spicetify 代理。">
+        <Row
+          label="API Key"
+          description="在 lyriva.xyz/dashboard/keys 创建，需具备 lyrics:read 权限"
+          stacked
+        >
+          <Input type="password" value={draft} placeholder="lk_live_..." onChange={setDraft} />
+        </Row>
+      </Section>
+    </DetailShell>
+  );
 }
 
 export function DetailGeniusToken({ onBack }: { onBack: () => void }) {

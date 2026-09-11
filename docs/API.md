@@ -6,15 +6,15 @@
 
 lyrivaMusic 使用两级歌词来源：
 
-1. **LYRIVA 主源**：内置 `https://api.lyriva.xyz`，通过 `/v1/lyrics` 一次请求获取最终歌词模型。
+1. **LYRIVA 主源**：使用 `https://api.lyriva.xyz` 的 Unified API，通过 `/lyriva/lyrics` 一次请求获取最终歌词模型。
 2. **Genius 兜底**：LYRIVA 未命中或暂时不可用时，使用用户在设置中配置的 Genius Access Token 搜索静态歌词；只接受 Matcher 判定为 HIGH/GOOD 的候选。
 
-设置页不再提供 NCM、QQ、LRCLIB 或 LYRIVA 地址/Key 开关。Genius Token 仍可在「设置 → 歌词来源」中配置。
+设置页不再提供 NCM、QQ、LRCLIB 或 LYRIVA 地址开关。Lyriva API Key 与 Genius Token 可在「设置 → 歌词来源」中配置。
 
 ## LYRIVA 主源
 
 ```text
-GET https://api.lyriva.xyz/v1/lyrics
+GET https://api.lyriva.xyz/lyriva/lyrics
 ```
 
 查询参数：
@@ -28,7 +28,7 @@ GET https://api.lyriva.xyz/v1/lyrics
 请求头：
 
 ```http
-Authorization: Bearer <内置 Key>
+Authorization: Bearer <用户配置的 API Key>
 Accept: application/json
 ```
 
@@ -50,6 +50,8 @@ Accept: application/json
 ```
 
 客户端会校验歌词文本、时间戳和匹配元数据；不满足可信度要求的数据不会进入渲染或持久缓存。
+
+API Key 以明文形式保存在本机 Spicetify 设置中，不会写入构建产物。客户端优先从 Spotify 直接请求 API；如果服务端未允许 `https://xpui.app.spotify.com` Origin，则回退到 Spicetify CORS 代理。
 
 ## Genius 兜底
 

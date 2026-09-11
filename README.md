@@ -48,11 +48,11 @@ spicetify apply
 
 安装完成后，可从 Spotify 菜单或歌词页右上角进入“lyrivaMusic 设置”。
 
-- **歌词来源**：LYRIVA 无需额外配置；Genius 仅作为可选兜底，需要填写 Access Token。
+- **歌词来源**：Lyriva 使用 Unified API，需要填写具备 `lyrics:read` 权限的 API Key；Genius 仅作为可选兜底，需要填写 Access Token。
 - **歌词翻译**：Google 翻译无需 API Key；DeepSeek、OpenAI 和自定义接口需要填写对应的地址、模型或 API Key。
 - **缓存管理**：可以清除当前歌曲、全部歌词或翻译缓存；过期和损坏的数据会自动清理。
 
-API Key 以明文形式保存在本机的 Spicetify 设置中，仅在调用时发送给你选择的 Genius 或翻译服务商。请仅使用权限受限的专用密钥。
+API Key 以明文形式保存在本机的 Spicetify 设置中，仅在调用时发送给对应服务。Lyriva 请求优先直连；服务端未允许 Spotify Origin 时会回退到 Spicetify CORS 代理。请仅使用权限受限的专用密钥。
 
 ## 本地开发
 

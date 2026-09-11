@@ -1,7 +1,7 @@
 // LYRIVA 歌词适配器：一次 GET 拿到「最终歌词」，完全替换内置多源搜索 → Matcher → 取词链。
 //
-// 契约（status.lyriva.xyz/docs）：
-//   GET {base}/v1/lyrics?title&artist&album&duration&isrc   （duration 单位：秒）
+// 契约（lyriva.xyz/docs#unified-api）：
+//   GET {base}/lyriva/lyrics?title&artist&album&duration&isrc   （duration 单位：秒）
 //   Authorization: Bearer <key>
 //   成功：{ data: { provider, track, plainLyrics, syncedLyrics:[{startMs,text}], translation, … }, meta: { matchLevel, matchScore, … } }
 //   失败：{ error: { code, message, requestId } }，HTTP 404/429/502/503/401…
@@ -10,19 +10,18 @@
 // 无 key 直接 skipped，绝不发请求；负缓存由 fetchLyrics 按分类结果决定。
 import Logger from "../Logger.ts";
 import { getSpicetify } from "../getSpicetify.ts";
+import { $lyrivaApiKey } from "../stores.ts";
 import { buildLyrivaModelFromResponse } from "./lyrivaMap.ts";
 import type { LyricsPayload, TargetTrack } from "./matcher.ts";
 
 const lyrivaLogger = new Logger("LYRIVA");
 
-// ── 内置服务配置 ──────────────────────────────────────────────────────
-// 地址与 API Key 随客户端分发，用户零配置。注意：Key 会进入产物 JS，
-// 泄漏面等于分发面——仅适合自有/可控的 LYRIVA 服务。
+// API Base URL 是公开端点，可以随客户端分发；API Key 必须由用户在设置中填写。
 const LYRIVA_BASE_URL = "https://api.lyriva.xyz";
-const LYRIVA_API_KEY = "lk_live_VJPuGhJG4tYFvTbDPUy99HIf7kUWd-N_918HKHDKqGI";
 
 const TIMEOUT_MS = 15000;
 const DEFAULT_PROXY_TEMPLATE = "https://cors-proxy.spicetify.app/{url}";
+let directTransportSupported: boolean | null = null;
 
 class LyrivaTimeoutError extends Error {
   constructor() {
@@ -39,13 +38,7 @@ export type LyrivaResult =
 
 type RawResult = { status: number; json: unknown };
 
-/**
- * 读取 spicetify 的 CORS 代理模板（与 spicetifyWrapper 内部一致）。
- * 关键：Spicetify 的 CosmosAsync 传输层会【丢弃第三方请求的自定义 header】
- * （其 GET 包装函数只接收 (url, body) 两个参数，Authorization 根本到不了上游）。
- * 因此这里不走 CosmosAsync，而是自己用原生 fetch 打代理 URL，显式带上
- * Authorization 头——代理会原样转发（已实测 proxy + Bearer → 200）。
- */
+/** 读取 Spicetify 的可信 CORS 代理模板；仅在 API 不允许 Spotify Origin 时回退。 */
 function proxyTemplate(): string {
   let value = DEFAULT_PROXY_TEMPLATE;
   try {
@@ -64,6 +57,31 @@ function proxyTemplate(): string {
   }
 }
 
+async function fetchLyriva(
+  url: string,
+  headers: Record<string, string>,
+  signal: AbortSignal
+): Promise<Response> {
+  const request = { credentials: "omit" as const, headers, signal };
+  if (!getSpicetify()) return fetch(url, request);
+
+  // 优先直连，避免 API Key 经过共享代理。服务端一旦允许 Spotify Origin，
+  // 新启动的客户端会自动走这条路径；CORS 不允许时，本次会失败并缓存回退策略。
+  if (directTransportSupported !== false) {
+    try {
+      const response = await fetch(url, request);
+      directTransportSupported = true;
+      return response;
+    } catch (error) {
+      if (signal.aborted) throw error;
+      directTransportSupported = false;
+    }
+  }
+
+  const proxyUrl = proxyTemplate().replace("{url}", url);
+  return fetch(proxyUrl, request);
+}
+
 /** 传输：原生 fetch + 超时 + 外部 signal 合并 + UTF-8 强制解码。 */
 async function getJson(
   url: string,
@@ -71,9 +89,6 @@ async function getJson(
   signal?: AbortSignal
 ): Promise<RawResult> {
   if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-  // CEF 环境（存在 Spicetify）：第三方域名原生 fetch 会被 CORS 拦截，必须经代理；
-  // Node 测试：直连即可。
-  const finalUrl = getSpicetify() ? proxyTemplate().replace("{url}", url) : url;
   const ctrl = new AbortController();
   let timedOut = false;
   const timer = setTimeout(() => {
@@ -83,7 +98,7 @@ async function getJson(
   const onAbort = () => ctrl.abort();
   signal?.addEventListener("abort", onAbort, { once: true });
   try {
-    const res = await fetch(finalUrl, { headers, signal: ctrl.signal });
+    const res = await fetchLyriva(url, headers, ctrl.signal);
     const buf = await res.arrayBuffer();
     const text = new TextDecoder("utf-8").decode(buf);
     let json: unknown = null;
@@ -149,7 +164,7 @@ export async function tryLyrivaLyrics(
   target: TargetTrack,
   signal?: AbortSignal
 ): Promise<LyrivaResult> {
-  const key = LYRIVA_API_KEY.trim();
+  const key = $lyrivaApiKey.get().trim();
   if (!key) return { kind: "skipped" };
   const base = LYRIVA_BASE_URL;
 
@@ -161,7 +176,7 @@ export async function tryLyrivaLyrics(
     params.set("duration", String(Math.round(target.durationMs / 1000)));
   }
   if (target.isrc) params.set("isrc", target.isrc);
-  const url = `${base}/v1/lyrics?${params.toString()}`;
+  const url = `${base}/lyriva/lyrics?${params.toString()}`;
 
   let raw: RawResult;
   try {

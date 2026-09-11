@@ -106,6 +106,8 @@ export const $customApiKey = persistAtom<string>("customApiKey", "");
 export const $customApiModel = persistAtom<string>("customApiModel", "");
 // Genius API Access Token（用户自填；不再硬编码进客户端 JS）
 export const $geniusApiToken = persistAtom<string>("geniusApiToken", "");
+// Lyriva Unified API Key（用户自填；本地保存，不进入构建产物）
+export const $lyrivaApiKey = persistAtom<string>("lyrivaApiKey", "");
 
 // Version atom — NOT persisted, set once at startup
 export const $spicyLyricsVersion = atom<string>(

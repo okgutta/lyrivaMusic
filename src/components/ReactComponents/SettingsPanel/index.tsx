@@ -12,6 +12,7 @@ import {
   DetailCustomConfig,
   DetailDeepSeekKey,
   DetailGeniusToken,
+  DetailLyrivaApiKey,
   DetailTranslationLanguage,
   DetailOpenAIConfig,
   DetailTranslationModel,
@@ -54,6 +55,7 @@ const SECTIONS = [
 
 type SectionValue = (typeof SECTIONS)[number]["value"];
 type DetailId =
+  | "lyriva-key"
   | "genius-token"
   | "translation-lang"
   | "deepseek-key"
@@ -161,6 +163,8 @@ function sectionFor(
 
 function DetailPage({ id, onBack }: { id: DetailId; onBack: () => void }) {
   switch (id) {
+    case "lyriva-key":
+      return <DetailLyrivaApiKey onBack={onBack} />;
     case "genius-token":
       return <DetailGeniusToken onBack={onBack} />;
     case "translation-lang":
