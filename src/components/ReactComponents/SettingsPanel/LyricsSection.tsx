@@ -1,74 +1,135 @@
 import { useStore } from "@nanostores/react";
 import {
   $disableNpvLyrics,
+  $geniusApiToken,
   $hideNpvLyricsWhenUnavailable,
+  $learningHideWords,
+  $learningMode,
   $lineHoverBackground,
-  $lockedMediaBox,
+  $lyricsTranslationDisplay,
   $minimalLyricsMode,
+  $playbackOffset,
   $popupLyricsAllowed,
   $simpleLyricsMode,
   $simpleLyricsModeRenderingType,
-  $viewControlsPosition,
 } from "../../../utils/stores.ts";
-import { $isGlobalNav } from "../../../utils/uiState.ts";
-import { matches, Row, Section, SegmentedControl, Toggle } from "./components.tsx";
+import {
+  matches,
+  NavigationRow,
+  Row,
+  Section,
+  SegmentedControl,
+  Slider,
+  Toggle,
+} from "./components.tsx";
 
 const SECTION_NAME = "lyrics-display";
 const renderingTypeOptions = ["calculate", "animate"];
 const renderingTypeLabels = ["逐字计算", "补间动画"];
-const vcPositionOptions = ["Top", "Bottom"];
-const vcPositionLabels = ["上方", "下方"];
+const translationDisplayOptions = ["original", "translated", "bilingual"];
+const translationDisplayLabels = ["仅原文", "仅译文", "双语"];
 
 interface Props {
   query: string;
   sectionFilter: string;
+  onOpenDetail: (id: "genius-token") => void;
 }
 
-export default function LyricsSection({ query, sectionFilter }: Props) {
+export default function LyricsSection({ query, sectionFilter, onOpenDetail }: Props) {
   const simpleLyricsMode = useStore($simpleLyricsMode);
   const simpleLyricsModeRenderingType = useStore($simpleLyricsModeRenderingType);
   const minimalLyricsMode = useStore($minimalLyricsMode);
   const lineHoverBackground = useStore($lineHoverBackground);
-  const lockedMediaBox = useStore($lockedMediaBox);
   const popupLyricsAllowed = useStore($popupLyricsAllowed);
-  const viewControlsPosition = useStore($viewControlsPosition);
   const hideNpvLyricsWhenUnavailable = useStore($hideNpvLyricsWhenUnavailable);
   const disableNpvLyrics = useStore($disableNpvLyrics);
-  const isGlobalNav = useStore($isGlobalNav);
+  const lyricsTranslationDisplay = useStore($lyricsTranslationDisplay);
+  const learningMode = useStore($learningMode);
+  const learningHideWords = useStore($learningHideWords);
+  const playbackOffset = useStore($playbackOffset);
+  const geniusApiToken = useStore($geniusApiToken);
 
   if (sectionFilter !== "All" && sectionFilter !== SECTION_NAME) return null;
 
-  const r1 = matches(query, "简洁歌词模式", "移除歌词的额外视觉效果");
-  const r2 = matches(query, "简洁模式：文字动画样式", "简洁歌词模式下歌词文字的过渡渲染方式。");
-  const r3 = matches(query, "极简歌词模式", "在全屏和影院模式下隐藏已演唱的歌词行");
+  const r1 = matches(query, "简化歌词效果 简洁歌词模式", "移除歌词的额外视觉效果");
+  const r2 =
+    (simpleLyricsMode || query.trim().length > 0) &&
+    matches(query, "文字过渡 简洁模式：文字动画样式", "简化歌词效果下歌词文字的过渡渲染方式。");
+  const r3 = matches(query, "隐藏已唱歌词 极简歌词模式", "在全屏和影院模式下隐藏已演唱的歌词行");
   const r4 = matches(query, "歌词行悬停背景", "鼠标悬停歌词行时，在其后方显示高亮框");
-  const r5 = matches(query, "紧凑模式下锁定媒体框尺寸", "紧凑模式下媒体框保持固定尺寸。");
   const r6 = matches(query, "禁用弹出歌词窗口", "关闭桌面弹出歌词窗口功能。");
-  const r7 = matches(query, "歌词控制按钮位置", "歌词控制按钮在播放栏的上下位置。");
-  const r8 = matches(query, "禁用正在播放歌词", "在正在播放视图中不显示歌词。");
-  const r9 = matches(
+  const r8 = matches(query, "正在播放歌词卡片", "在正在播放视图中显示或隐藏歌词。");
+  const r9 =
+    (!disableNpvLyrics || query.trim().length > 0) &&
+    matches(
+      query,
+      "无歌词时隐藏正在播放歌词卡片",
+      "当前歌曲没有歌词时，隐藏正在播放视图的歌词卡片。"
+    );
+  const r10 = matches(
     query,
-    "无歌词时隐藏正在播放歌词卡片",
-    "当前歌曲没有歌词时，隐藏正在播放视图的歌词卡片。"
+    "显示语言 译文显示模式",
+    "同时显示原文与译文、只显示原文，或只显示译文（无译文的行仍显示原文）。"
   );
-  if (!r1 && !r2 && !r3 && !r4 && !r5 && !r6 && !r7 && !r8 && !r9) return null;
+  const r11 = matches(
+    query,
+    "逐词对照",
+    "在当前行下方列出推断出的逐词对照清单（原文词 ↔ 译文词）。对照由分词与相似度推断，仅供参考。"
+  );
+  const r12 =
+    (learningMode || query.trim().length > 0) &&
+    matches(query, "藏词自测", "逐词对照清单里遮住译文一侧，点击才揭示，用来做回忆自测。");
+  const rSync = matches(query, "歌词同步偏移 播放偏移", "以毫秒为单位提前或推迟歌词的时间轴。");
+  const rGenius = matches(query, "Genius 备用歌词 备用歌词来源", "API Token 静态歌词");
+  if (!r1 && !r2 && !r3 && !r4 && !r6 && !r8 && !r9 && !r10 && !r11 && !r12 && !rSync && !rGenius)
+    return null;
 
   return (
     <>
+      {(r10 || rSync) && (
+        <Section>
+          {r10 && (
+            <Row label="显示语言">
+              <SegmentedControl
+                value={lyricsTranslationDisplay}
+                options={translationDisplayOptions}
+                labels={translationDisplayLabels}
+                onChange={(v) =>
+                  $lyricsTranslationDisplay.set(v as typeof lyricsTranslationDisplay)
+                }
+              />
+            </Row>
+          )}
+          {rSync && (
+            <Row label="歌词同步偏移" description="负值提前，正值延后。" stacked>
+              <Slider
+                value={playbackOffset}
+                min={-5000}
+                max={5000}
+                step={10}
+                defaultValue={0}
+                unit="ms"
+                onChange={(v) => $playbackOffset.set(v)}
+              />
+            </Row>
+          )}
+        </Section>
+      )}
+
       {(r1 || r2 || r3 || r4) && (
-        <Section title="歌词模式">
+        <Section title="动态与阅读">
           {r1 && (
-            <Row label="简洁歌词模式">
+            <Row label="简化歌词效果">
               <Toggle checked={simpleLyricsMode} onChange={(v) => $simpleLyricsMode.set(v)} />
             </Row>
           )}
 
           {r2 && (
             <Row
-              label="简洁模式：文字动画样式"
+              label="文字过渡"
               nested
               disabled={!simpleLyricsMode}
-              disabledReason="请先启用「简洁歌词模式」再修改此项"
+              disabledReason="开启简化歌词效果后可用"
             >
               <SegmentedControl
                 value={simpleLyricsModeRenderingType}
@@ -81,7 +142,7 @@ export default function LyricsSection({ query, sectionFilter }: Props) {
           )}
 
           {r3 && (
-            <Row label="极简歌词模式">
+            <Row label="隐藏已唱歌词" description="仅在全屏与影院模式下生效。">
               <Toggle checked={minimalLyricsMode} onChange={(v) => $minimalLyricsMode.set(v)} />
             </Row>
           )}
@@ -94,38 +155,17 @@ export default function LyricsSection({ query, sectionFilter }: Props) {
         </Section>
       )}
 
-      {(r5 || r6 || r7 || r8 || r9) && (
-        <Section title="正在播放与弹出">
-          {r5 && (
-            <Row label="紧凑模式下锁定媒体框尺寸">
-              <Toggle checked={lockedMediaBox} onChange={(v) => $lockedMediaBox.set(v)} />
-            </Row>
-          )}
-
+      {(r6 || r8 || r9) && (
+        <Section title="窗口与卡片">
           {r6 && (
-            <Row label="禁用弹出歌词窗口">
-              <Toggle checked={!popupLyricsAllowed} onChange={(v) => $popupLyricsAllowed.set(!v)} />
-            </Row>
-          )}
-
-          {r7 && (
-            <Row
-              label="歌词控制按钮位置"
-              disabled={!isGlobalNav}
-              disabledReason="仅在新版 Spotify 导航布局中可用"
-            >
-              <SegmentedControl
-                value={viewControlsPosition}
-                options={vcPositionOptions}
-                labels={vcPositionLabels}
-                onChange={(v) => $viewControlsPosition.set(v)}
-              />
+            <Row label="弹出歌词窗口">
+              <Toggle checked={popupLyricsAllowed} onChange={(v) => $popupLyricsAllowed.set(v)} />
             </Row>
           )}
 
           {r8 && (
-            <Row label="禁用正在播放歌词">
-              <Toggle checked={disableNpvLyrics} onChange={(v) => $disableNpvLyrics.set(v)} />
+            <Row label="正在播放歌词卡片">
+              <Toggle checked={!disableNpvLyrics} onChange={(v) => $disableNpvLyrics.set(!v)} />
             </Row>
           )}
 
@@ -139,6 +179,42 @@ export default function LyricsSection({ query, sectionFilter }: Props) {
               <Toggle
                 checked={hideNpvLyricsWhenUnavailable}
                 onChange={(v) => $hideNpvLyricsWhenUnavailable.set(v)}
+                disabled={disableNpvLyrics}
+              />
+            </Row>
+          )}
+        </Section>
+      )}
+      {rGenius && (
+        <Section>
+          <NavigationRow
+            label="Genius 备用歌词"
+            description="可选，补充静态歌词"
+            value={geniusApiToken ? "已配置" : "未配置"}
+            valueState={geniusApiToken ? "ok" : "unset"}
+            onClick={() => onOpenDetail("genius-token")}
+          />
+        </Section>
+      )}
+      {(r11 || r12) && (
+        <Section title="语言学习" description="逐词对照根据整行译文推断，仅供学习参考。">
+          {r11 && (
+            <Row label="逐词对照">
+              <Toggle checked={learningMode} onChange={(v) => $learningMode.set(v)} />
+            </Row>
+          )}
+
+          {r12 && (
+            <Row
+              label="藏词自测"
+              nested
+              disabled={!learningMode}
+              disabledReason="开启逐词对照后可用"
+            >
+              <Toggle
+                checked={learningHideWords}
+                onChange={(v) => $learningHideWords.set(v)}
+                disabled={!learningMode}
               />
             </Row>
           )}

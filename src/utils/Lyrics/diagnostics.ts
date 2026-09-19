@@ -92,8 +92,7 @@ export function recordCacheDiagnostic(status: DiagnosticStatus): void {
 type LyrivaDiagnosticResult =
   | { kind: "ok" }
   | { kind: "not-found" }
-  | { kind: "unavailable"; reason: string }
-  | { kind: "skipped" };
+  | { kind: "unavailable"; reason: string };
 
 export function recordLyrivaResult(
   result: LyrivaDiagnosticResult,
@@ -116,14 +115,6 @@ export function recordLyrivaResult(
         level: "success",
         title: "请求完成，无匹配歌词",
         detail: `${context} · 404 是正常的未命中结果`,
-      });
-      break;
-    case "skipped":
-      recordServiceDiagnostic({
-        ...common,
-        level: "error",
-        title: "服务未配置",
-        detail: `${context} · LYRIVA 密钥为空`,
       });
       break;
     case "unavailable":

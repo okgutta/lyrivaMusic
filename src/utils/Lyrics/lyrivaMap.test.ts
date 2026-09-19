@@ -220,5 +220,52 @@ const target: TargetTrack = {
   check("无词返回 null", buildLyrivaModel(data, target) === null);
 }
 
+// Backend YRC/QRC/KRC all normalize to absolute startMs plus durationMs.
+{
+  const data = {
+    syncedLyrics: [
+      { startMs: 0, text: "制作信息" },
+      {
+        startMs: 1000,
+        durationMs: 1400,
+        text: "你好 世界",
+        words: [
+          { text: "你", startMs: 1000, durationMs: 300 },
+          { text: "好 ", startMs: 1300, durationMs: 300 },
+          { text: "世界", startMs: 1900, durationMs: 500 },
+        ],
+      },
+      { startMs: 5000, text: "逐行回退" },
+    ],
+    translation: "credits\nhello world\nline fallback",
+    meta: { matchLevel: "HIGH", matchScore: 0.99 },
+  };
+  const model = buildLyrivaModel(data, target);
+  const syllables = model?.Content?.[1].Lead?.Syllables;
+  check("后端 durationMs 逐字格式生成 Syllable", model?.Type === "Syllable", model);
+  check(
+    "保留绝对字时间并换算秒",
+    syllables?.[2].StartTime === 1.9 && syllables?.[2].EndTime === 2.4,
+    syllables
+  );
+  check("行时长用于 Lead 结束", model?.Content?.[1].Lead?.EndTime === 2.4);
+  check(
+    "中文连字与英文空格不混淆",
+    syllables?.[0].IsPartOfWord === true && syllables?.[1].IsPartOfWord === false
+  );
+  check(
+    "混合逐行不伪造字时间",
+    model?.Content?.[2].Lead?.Syllables?.length === 1 &&
+      model?.Content?.[2].Lead?.Syllables?.[0].Text === "逐行回退"
+  );
+  check("逐字歌词保留整行翻译", model?.Content?.[1].Translation === "hello world");
+  check(
+    "API 时间边界不再细分成推测字时间",
+    syllables?.every((word) => word.PreserveTiming === true) === true
+  );
+  data.syncedLyrics[1].words![0].durationMs = -10;
+  check("无效字时间回退逐行", buildLyrivaModel(data, target)?.Type === "Line");
+}
+
 console.log(`[lyrivaMap] ${passed} passed, ${failures} failed`);
 if (failures > 0) (globalThis as any).process?.exit?.(1);

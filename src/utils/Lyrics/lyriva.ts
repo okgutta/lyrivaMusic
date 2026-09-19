@@ -2,21 +2,20 @@
 //
 // 契约（lyriva.xyz/docs#unified-api）：
 //   GET {base}/lyriva/lyrics?title&artist&album&duration&isrc   （duration 单位：秒）
-//   Authorization: Bearer <key>
+//   匿名读取，不需要 API Key 或登录。
 //   成功：{ data: { provider, track, plainLyrics, syncedLyrics:[{startMs,text}], translation, … }, meta: { matchLevel, matchScore, … } }
 //   失败：{ error: { code, message, requestId } }，HTTP 404/429/502/503/401…
 //
 // 本模块只负责「请求 → 分类」，映射逻辑在 lyrivaMap.ts（纯函数）。
-// 无 key 直接 skipped，绝不发请求；负缓存由 fetchLyrics 按分类结果决定。
+// 负缓存由 fetchLyrics 按分类结果决定。
 import Logger from "../Logger.ts";
 import { getSpicetify } from "../getSpicetify.ts";
-import { $lyrivaApiKey } from "../stores.ts";
 import { buildLyrivaModelFromResponse } from "./lyrivaMap.ts";
 import type { LyricsPayload, TargetTrack } from "./matcher.ts";
 
 const lyrivaLogger = new Logger("LYRIVA");
 
-// API Base URL 是公开端点，可以随客户端分发；API Key 必须由用户在设置中填写。
+// 公开只读端点，客户端不发送凭证。
 const LYRIVA_BASE_URL = "https://api.lyriva.xyz";
 
 const TIMEOUT_MS = 15000;
@@ -33,8 +32,7 @@ class LyrivaTimeoutError extends Error {
 export type LyrivaResult =
   | { kind: "ok"; model: LyricsPayload }
   | { kind: "not-found" }
-  | { kind: "unavailable"; reason: string }
-  | { kind: "skipped" };
+  | { kind: "unavailable"; reason: string };
 
 type RawResult = { status: number; json: unknown };
 
@@ -65,7 +63,7 @@ async function fetchLyriva(
   const request = { credentials: "omit" as const, headers, signal };
   if (!getSpicetify()) return fetch(url, request);
 
-  // 优先直连，避免 API Key 经过共享代理。服务端一旦允许 Spotify Origin，
+  // 优先直连。服务端一旦允许 Spotify Origin，
   // 新启动的客户端会自动走这条路径；CORS 不允许时，本次会失败并缓存回退策略。
   if (directTransportSupported !== false) {
     try {
@@ -136,7 +134,7 @@ function classify(status: number, json: unknown, target: TargetTrack): LyrivaRes
     code === "UNAUTHORIZED" ||
     code === "FORBIDDEN"
   ) {
-    return { kind: "unavailable", reason: "LYRIVA 鉴权失败，请检查 API Key" };
+    return { kind: "unavailable", reason: "LYRIVA 服务暂时拒绝访问，请稍后重试" };
   }
   if (status === 429 || code === 429 || code === "RATE_LIMITED") {
     return { kind: "unavailable", reason: "LYRIVA 请求限流（429）" };
@@ -157,15 +155,13 @@ function classify(status: number, json: unknown, target: TargetTrack): LyrivaRes
 }
 
 /**
- * 对外入口：读 key/base → 无 key skipped；有 key 发请求并分类。
+ * 对外入口：通过公开只读接口请求并分类。
  * 404/空词 → not-found（权威无歌词）；限流/超时/鉴权/服务端 → unavailable（不写负缓存，可重试）。
  */
 export async function tryLyrivaLyrics(
   target: TargetTrack,
   signal?: AbortSignal
 ): Promise<LyrivaResult> {
-  const key = $lyrivaApiKey.get().trim();
-  if (!key) return { kind: "skipped" };
   const base = LYRIVA_BASE_URL;
 
   const params = new URLSearchParams();
@@ -180,11 +176,7 @@ export async function tryLyrivaLyrics(
 
   let raw: RawResult;
   try {
-    raw = await getJson(
-      url,
-      { Authorization: `Bearer ${key}`, Accept: "application/json" },
-      signal
-    );
+    raw = await getJson(url, { Accept: "application/json" }, signal);
   } catch (err) {
     if (signal?.aborted) throw err;
     const msg = err instanceof Error ? err.message : String(err);

@@ -15,9 +15,13 @@
   "ignorePatterns": [
     "node_modules/**",
     "dist/**",
-    "dist_legacy/**",
     "build/**",
     ".spicetify/**",
-    "public-storage/**"
+    ".tmp/**",
+    "coverage/**",
+    ".preview/**",
+    "_rollback-backups/**",
+    ".zcode/**",
+    ".impeccable/**"
   ]
 }

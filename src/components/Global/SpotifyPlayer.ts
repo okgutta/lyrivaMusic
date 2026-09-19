@@ -109,7 +109,6 @@ export const SpotifyPlayer = {
   },
   Playbar: (() => {
     let rightContainer: HTMLElement | null;
-    let sibling: HTMLElement | null;
     const buttonsStash = new Set<HTMLElement>();
     const MAX_MOUNT_RETRIES = 50;
     const MOUNT_RETRY_DELAY = 300;
@@ -135,15 +134,15 @@ export const SpotifyPlayer = {
         registerOnCreate: boolean = true
       ) {
         this.element = document.createElement("button");
-        this.element.classList.add("main-genericButton-button");
+        this.element.type = "button";
+        this.element.classList.add("sl-playbar-button", "main-genericButton-button");
         this.iconElement = document.createElement("span");
-        this.iconElement.classList.add("Wrapper-sm-only", "Wrapper-small-only");
+        this.iconElement.classList.add("sl-playbar-button-icon");
         this.element.appendChild(this.iconElement);
         this.icon = icon;
         this.onClick = onClick;
         this.disabled = disabled;
         this.active = active;
-        addClassname(this.element);
         this.tippy = (Spicetify as any).Tippy?.(this.element, {
           content: label,
           ...(Spicetify as any).TippyProps,
@@ -156,6 +155,7 @@ export const SpotifyPlayer = {
       }
       set label(text: string) {
         this._label = text;
+        this.element.setAttribute("aria-label", text);
         if (!this.tippy) this.element.setAttribute("title", text);
         else this.tippy.setContent(text);
       }
@@ -189,6 +189,7 @@ export const SpotifyPlayer = {
       }
       set active(bool: boolean) {
         this._active = bool;
+        this.element.setAttribute("aria-pressed", String(bool));
         this.element.classList.toggle("main-genericButton-buttonActive", bool);
         this.element.classList.toggle("main-genericButton-buttonActiveDot", bool);
       }
@@ -215,30 +216,8 @@ export const SpotifyPlayer = {
         }
         return;
       }
-      for (const button of buttonsStash) {
-        addClassname(button);
-      }
       rightContainer.prepend(...Array.from(buttonsStash));
     })();
-
-    function addClassname(element: HTMLElement, attempt = 0) {
-      sibling =
-        document.querySelector<HTMLElement>(
-          ".main-nowPlayingBar-right .main-genericButton-button"
-        ) ??
-        document.querySelector<HTMLElement>(
-          ".main-nowPlayingBar-extraControls .main-genericButton-button"
-        );
-      if (!sibling) {
-        if (attempt < MAX_MOUNT_RETRIES) {
-          setTimeout(() => addClassname(element, attempt + 1), MOUNT_RETRY_DELAY);
-        }
-        return;
-      }
-      for (const className of Array.from(sibling.classList)) {
-        if (!className.startsWith("main-genericButton")) element.classList.add(className);
-      }
-    }
 
     const widgetStash = new Set<HTMLElement>();
     let nowPlayingWidget: HTMLElement | null;

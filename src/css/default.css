@@ -11,6 +11,14 @@
   display: none;
 }
 
+/* Spicetify maps both the separator and this action group to the spacer class. */
+.Root__globalNav .main-actionButtons.main-actionButtons-spacer {
+  background: transparent;
+  width: auto;
+  height: auto;
+  margin: 0;
+}
+
 #SpicyLyricsPage {
   margin: 0;
   padding: 0;
@@ -311,31 +319,89 @@ body:not(.SpicyLyrics_StaticBackground)
   border: 1px solid hsla(0, 0%, 100%, 0.5);
 }
 
-#SpicyLyricsPageSvg {
+/* Own the button layout instead of copying Spotify's version-specific classes. */
+.sl-playbar-button.main-genericButton-button {
+  appearance: none;
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-subdued, #b3b3b3);
+  line-height: 1;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.sl-playbar-button:not(:disabled):hover,
+.sl-playbar-button:not(:disabled):focus-visible {
+  color: var(--spice-text, #fff);
+}
+
+.sl-playbar-button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.sl-playbar-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sl-playbar-button.main-genericButton-buttonActive {
+  color: var(--spice-button, #1db954);
+}
+
+.sl-playbar-button .sl-playbar-button-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  pointer-events: none;
+}
+
+.sl-playbar-button .sl-playbar-button-icon svg {
+  display: block;
+  width: 20px;
+  height: 20px;
   fill: currentColor;
-  transform: translateY(2px);
 }
 
-.Root:not(.global-nav) #SpicyLyricsPageSvg {
-  transform: translateY(0);
+.sl-playbar-button .sl-playbar-button-icon svg.NoFill {
+  fill: none;
 }
 
-#SpicyLyrics_PopupLyricsButton svg {
-  fill: var(--encore-icon-fill, currentColor);
-  height: var(--encore-icon-height, var(--encore-graphic-size-decorative-base));
-  width: var(--encore-icon-width, var(--encore-graphic-size-decorative-base));
-  transform: translateY(2px);
+.sl-playbar-button .sl-playbar-button-icon #SpicyLyricsPageSvg {
+  width: 22px;
+  height: 22px;
 }
 
-button:has(#SpicyLyricsPageSvg)::after {
-  transform: translateX(-370%) translateY(-40%) !important;
+.sl-playbar-button.main-genericButton-button::after {
+  content: none;
 }
 
-button:has(#SpicyLyricsPageSvg):not(
-    .main-genericButton-buttonActive,
-    .main-genericButton-buttonActiveDot
-  )::after {
-  content: unset;
+.sl-playbar-button.main-genericButton-buttonActiveDot::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--spice-button, #1db954);
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 
 /* "Page Not Visible" fix */
@@ -346,19 +412,6 @@ button:has(#SpicyLyricsPageSvg):not(
 .Root__main-view:has(#SpicyLyricsPage) .main-view-container__scroll-node,
 .Root__main-view:has(#SpicyLyricsPage) .main-view-container .div[data-overlayscrollbars-viewport] {
   height: 100% !important;
-}
-
-body:not(:has(.Root__main-view-overlay #SpicyLyricsPage:is(.Fullscreen)))
-  #SpicyLyrics_FullscreenButton {
-  scale: 1.25;
-}
-
-#SpicyLyrics_FullscreenButton {
-  color: rgba(var(--spice-rgb-selected-row), 0.7) !important;
-}
-
-#SpicyLyrics_FullscreenButton svg {
-  fill: currentColor;
 }
 
 body:not(:has(.Root__main-view-overlay .BeautifulLyricsPage:is(.Fullscreen)))
@@ -850,18 +903,4 @@ sl-generic-modal.SpicyLyricsModal .sl-modal-overlay-animated.Active .sl-modal-co
 .Root__right-sidebar aside {
   border-radius: var(--radius-sm);
   overflow: hidden;
-}
-
-.main-genericButton-button.main-genericButton-buttonActiveDot:after {
-  content: "";
-  background-color: var(--spice-button);
-  border-radius: 50%;
-  width: 4px;
-  height: 4px;
-  display: block;
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translate(-50%);
-  inline-size: 4px !important;
 }

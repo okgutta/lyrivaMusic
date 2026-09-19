@@ -3,9 +3,13 @@
  *
  * 【LLM 后端】DeepSeek / ChatGPT / 自定义 API —— 全部走 OpenAI 兼容
  *   /chat/completions 接口，仅 baseUrl / Key / 模型不同，共用同一客户端：
- *  - 每 20 行一组，行首打上 `[[SPICY_TR_<nonce>_<i>]]` 标记拼成一段文本，
- *    按标记把响应切回逐行（标记丢失时回退按换行切分）；
- *  - 失败指数退避重试 2 次；请求仅直连 HTTPS（本机回环地址可用 HTTP），
+ *  - 按行数动态分块（每块不超过 20 行，并发数可在设置里调，默认 3），
+ *    行首打上 `[[SPICY_TR_<nonce>_<i>]]` 标记拼成一段文本，按标记切回逐行
+ *    （标记丢失时回退按换行切分）；
+ *  - 个别行漏标记时只补发这几行；整块失败则降级为逐行重发；
+ *  - 失败重试 2 次，优先遵守服务端 Retry-After，否则线性退避；
+ *    所有请求经全局最小间隔闸门放行，避免并发触发限流；
+ *    请求仅直连 HTTPS（本机回环地址可用 HTTP），
  *    用户 API Key 不会经过共享代理。
  *
  * 【Google 免费翻译】无需配置（非官方接口，来自 Google 网页翻译内部的
@@ -24,20 +28,34 @@ import {
   $deepSeekModel,
   $openaiApiKey,
   $openaiModel,
+  $translationConcurrency,
   $translationProvider,
 } from "../../stores.ts";
 import { normalizeApiBaseUrl } from "./url.ts";
+import {
+  cleanLine,
+  buildMarkerPayload,
+  parseMarkedResponsePartial,
+  parseLineFallback,
+} from "../../../shared/lyrics/translationProtocol.ts";
+import { parseRetryAfterMs } from "../../../shared/lyrics/retryAfter.ts";
+import { planChunks } from "../../../shared/lyrics/chunkPlan.ts";
 
 const translateProviderLogger = new Logger("Translation Provider");
 
-const CHUNK_SIZE = 20; // LLM 每请求行数（20 行足够对齐且降低出错面）
-const GOOGLE_CHUNK_SIZE = 50; // Google 免费翻译每请求行数（按位置返回，可更大）
-const PARALLEL_CHUNKS = 3; // 并发 chunk 数：串行太慢，全并发有 429 风险，3 路是安全折中
+const CHUNK_SIZE = 20; // LLM 每请求行数上限（再多容易截断或丢标记）
+const GOOGLE_CHUNK_SIZE = 50; // Google 免费翻译每请求行数上限（按位置返回，可更大）
+const MIN_PARALLEL_LINES = 12; // 短歌词拆并发只会增加请求数，不值得
+const TARGET_LINES_PER_CHUNK = 8; // 拆并发时期望的每块行数
 const REQUEST_TIMEOUT_MS = 30000;
 const MAX_RETRIES = 2;
-
-const MARKER_PREFIX = "[[SPICY_TR_";
-const MARKER_REGEX = /\[\[\s*SPICY_TR_([A-Za-z0-9_]+)_(\d+)\s*\]\]/g;
+const DEFAULT_CONCURRENCY = 3;
+const MAX_CONCURRENCY = 6;
+const MIN_REQUEST_INTERVAL_MS = 100; // 全局最小请求间隔，抑制并发 worker 触发 429
+const MAX_RETRY_DELAY_MS = 15000; // 服务端 Retry-After 超过此值就不值得再等，直接交给上层
+const MAX_BLANK_REPAIRS_PER_CHUNK = 8; // 单 chunk 内空行定点补译上限，超过说明整块不可靠
+const MAX_LINE_FALLBACKS_PER_RUN = 60; // 单次 translateLines 内整块失败后逐行补译的行数上限
+const MAX_GOOGLE_SPLITS_PER_RUN = 8; // 单次 translateLines 内 Google 分半重试的额外请求上限
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) return Promise.reject(new DOMException("Aborted", "AbortError"));
@@ -55,19 +73,50 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+/** 携带 HTTP 状态与 Retry-After 的请求错误，重试策略据此决定退避时长 */
+class ProviderHttpError extends Error {
+  readonly status: number;
+  readonly retryAfterMs: number | null;
+
+  constructor(message: string, status: number, retryAfterMs: number | null = null) {
+    super(message);
+    this.name = "ProviderHttpError";
+    this.status = status;
+    this.retryAfterMs = retryAfterMs;
+  }
+}
+
+// 全局请求闸门：并发 worker 的请求按最小间隔依次放行，避免同一服务端瞬间被打爆
+let gateTail: Promise<void> = Promise.resolve();
+let lastRequestAt = 0;
+
+async function throttleRequest(signal?: AbortSignal): Promise<void> {
+  const queued = gateTail.then(async () => {
+    const wait = lastRequestAt + MIN_REQUEST_INTERVAL_MS - Date.now();
+    if (wait > 0) await sleep(wait, signal);
+    lastRequestAt = Date.now();
+  });
+  // 队尾吞掉异常，单个请求被取消/失败不影响后续排队者
+  gateTail = queued.catch(() => {});
+  await queued;
+}
+
 async function fetchWithTimeout(
   input: string,
   init: RequestInit,
   label: string,
   timeoutMs = REQUEST_TIMEOUT_MS
 ): Promise<Response> {
+  const externalSignal = init.signal;
+  // 限速排队不计入请求超时，否则排队长的请求会误报超时
+  await throttleRequest(externalSignal ?? undefined);
+
   const controller = new AbortController();
   let timedOut = false;
   const timer = setTimeout(() => {
     timedOut = true;
     controller.abort();
   }, timeoutMs);
-  const externalSignal = init.signal;
   const onAbort = () => controller.abort();
   externalSignal?.addEventListener("abort", onAbort, { once: true });
 
@@ -80,6 +129,11 @@ async function fetchWithTimeout(
     clearTimeout(timer);
     externalSignal?.removeEventListener("abort", onAbort);
   }
+}
+
+/** 取出响应头里的 Retry-After（秒或 HTTP-date），不可用时返回 null */
+function retryAfterOf(res: Response): number | null {
+  return parseRetryAfterMs(res.headers.get("retry-after"));
 }
 
 /** 目标语言代码 → 提示词里的语言名 */
@@ -186,65 +240,6 @@ export async function fetchModelsForProvider(
   return ids;
 }
 
-/** 清洗单行：去标记 / ``` / 编号 / "Here's the translation" 等包装残留 */
-function cleanLine(text: string): string {
-  return (text || "")
-    .replace(MARKER_REGEX, "")
-    .replace(/```[a-z0-9_-]*/gi, "")
-    .replace(/^\s*\d+[.)、]\s*/g, "")
-    .replace(
-      /^\s*(here('|')?s|here is|here are|sure[,!. ]|translation:?|translated lyrics:?|翻译如下[:：]?|译文[:：]?)\s*/i,
-      ""
-    )
-    .replace(/\r?\n+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function buildMarkerPayload(lines: string[], nonce: string): string {
-  return lines.map((line, i) => `${MARKER_PREFIX}${nonce}_${i}]]${line}`).join("\n");
-}
-
-/** 按标记把响应切回逐行 */
-function parseMarkedResponse(text: string, expectedCount: number, nonce: string): string[] | null {
-  const markerRegex = new RegExp(`\\[\\[SPICY_TR_${nonce}_(\\d+)\\]\\]`, "g");
-  const matches: Array<{ index: number; start: number; markerEnd: number }> = [];
-
-  let match: RegExpExecArray | null;
-  while ((match = markerRegex.exec(text)) !== null) {
-    matches.push({
-      index: Number.parseInt(match[1], 10),
-      start: match.index,
-      markerEnd: markerRegex.lastIndex,
-    });
-  }
-
-  if (matches.length !== expectedCount) return null;
-
-  const seen = new Set<number>();
-  const byIndex = Array.from({ length: expectedCount }, () => "");
-
-  for (let i = 0; i < matches.length; i++) {
-    const current = matches[i];
-    const next = matches[i + 1];
-    if (current.index < 0 || current.index >= expectedCount || seen.has(current.index)) return null;
-    seen.add(current.index);
-    const segment = text.slice(current.markerEnd, next ? next.start : text.length);
-    byIndex[current.index] = cleanLine(segment);
-  }
-
-  return seen.size === expectedCount ? byIndex : null;
-}
-
-/** 标记丢失时回退：按换行切分 */
-function parseLineFallback(text: string, expectedCount: number): string[] | null {
-  const lines = text
-    .split(/\r?\n+/)
-    .map((line) => cleanLine(line))
-    .filter(Boolean);
-  return lines.length === expectedCount ? lines : null;
-}
-
 /** Direct request only: user credentials must never transit a shared proxy. */
 async function postChatCompletions(
   config: ChatProviderConfig,
@@ -267,18 +262,23 @@ async function postChatCompletions(
     },
     config.label
   );
-  if (!res.ok) throw new Error(`${config.label} API HTTP ${res.status}`);
+  if (!res.ok) {
+    throw new ProviderHttpError(
+      `${config.label} API HTTP ${res.status}`,
+      res.status,
+      retryAfterOf(res)
+    );
+  }
   return await res.json();
 }
 
-async function translateChunk(
+/** 单次请求：打标记、调用、按标记回切（允许部分标记缺失，空位留空串） */
+async function requestChunkTranslation(
   config: ChatProviderConfig,
   chunk: string[],
   targetLang: string,
   signal?: AbortSignal
 ): Promise<string[]> {
-  activeSession.apiCalls += 1;
-
   const nonce = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
   const payload = buildMarkerPayload(chunk, nonce);
 
@@ -295,6 +295,7 @@ async function translateChunk(
   const payloadLen = chunk.join(" ").length;
   const maxTokens = Math.max(payloadLen * (isReasoner ? 6 : 4), isReasoner ? 8192 : 2048);
 
+  activeSession.apiCalls += 1;
   const data = await postChatCompletions(
     config,
     {
@@ -322,7 +323,7 @@ async function translateChunk(
   if (!translated) throw new Error(`${config.label} 返回空结果`);
 
   const parsed =
-    parseMarkedResponse(translated, chunk.length, nonce) ??
+    parseMarkedResponsePartial(translated, chunk.length, nonce) ??
     parseLineFallback(translated, chunk.length);
   if (!parsed) {
     // 不可解析：抛错走重试；重试仍失败 → 计入 failedChunks，调用方
@@ -333,8 +334,121 @@ async function translateChunk(
   return parsed;
 }
 
+/** 单个 chunk 的翻译结果；incomplete 表示仍有行未能译出（保留原文） */
+interface ChunkTranslation {
+  lines: string[];
+  incomplete: boolean;
+}
+
+/** 单次 translateLines 内的额外请求预算，避免兜底路径把请求量无限放大 */
+interface FallbackBudget {
+  lines: number;
+  googleSplits: number;
+}
+
+/**
+ * 翻译单个 chunk，并对批结果里的空行做定点补译。
+ * 模型偶尔漏掉中间几行标记时，只重发这几行，而不是让整块 20 行报废。
+ */
+async function translateChunk(
+  config: ChatProviderConfig,
+  chunk: string[],
+  targetLang: string,
+  signal?: AbortSignal
+): Promise<ChunkTranslation> {
+  return await retryWithBackoff(async () => {
+    const parsed = await requestChunkTranslation(config, chunk, targetLang, signal);
+
+    const blanks = parsed.map((text, index) => (text ? -1 : index)).filter((index) => index >= 0);
+    if (blanks.length === 0) return { lines: parsed, incomplete: false };
+    // 空行过多说明整块响应不可信（如被截断），判失败让本轮重试重发整块
+    if (blanks.length > MAX_BLANK_REPAIRS_PER_CHUNK) {
+      throw new Error(`${config.label} 响应缺失 ${blanks.length}/${chunk.length} 行`);
+    }
+
+    translateProviderLogger.info(`${config.label} 批结果缺 ${blanks.length} 行，逐行补译`);
+    const repaired = [...parsed];
+    let remaining = 0;
+    for (const index of blanks) {
+      // 补译失败只丢这一行，不影响同 chunk 内已成功的行
+      try {
+        const single = await retryWithBackoff(
+          () => requestChunkTranslation(config, [chunk[index]], targetLang, signal),
+          signal,
+          1
+        );
+        if (single[0]) repaired[index] = single[0];
+        else remaining++;
+      } catch (err) {
+        if (signal?.aborted) throw err;
+        remaining++;
+        translateProviderLogger.warn(`第 ${index} 行补译失败，保留原文:`, err);
+      }
+    }
+    // 仍缺行时保留已成功的行，但如实上报不完整，让上层标记可重试
+    return { lines: repaired, incomplete: remaining > 0 };
+  }, signal);
+}
+
+/**
+ * 整块失败后的兜底：改逐行重发，至少保住同 chunk 里能译出的行。
+ * 仅在整块重试耗尽后触发，且受单次运行的行数预算约束。
+ */
+async function translateChunkResilient(
+  config: ChatProviderConfig,
+  chunk: string[],
+  targetLang: string,
+  signal: AbortSignal | undefined,
+  budget: FallbackBudget
+): Promise<ChunkTranslation> {
+  try {
+    return await translateChunk(config, chunk, targetLang, signal);
+  } catch (err) {
+    if (signal?.aborted || !isRetryableError(err)) throw err;
+    // 401/403/429 是服务端针对本次身份的拒绝：逐行重发只会加剧限流或重复失败，
+    // 交给上层标记不完整、由用户稍后重试。408/5xx 是瞬时故障，逐行仍有意义。
+    if (
+      err instanceof ProviderHttpError &&
+      (err.status === 401 || err.status === 403 || err.status === 429)
+    ) {
+      throw err;
+    }
+    if (budget.lines <= 0) throw err;
+
+    translateProviderLogger.warn("整块翻译失败，改为逐行重发:", err);
+    const lines: string[] = [];
+    let remaining = 0;
+    for (const line of chunk) {
+      if (budget.lines <= 0) {
+        lines.push("");
+        remaining++;
+        continue;
+      }
+      budget.lines -= 1;
+      try {
+        const single = await retryWithBackoff(
+          () => requestChunkTranslation(config, [line], targetLang, signal),
+          signal,
+          1
+        );
+        lines.push(single[0] ?? "");
+        if (!single[0]) remaining++;
+      } catch (lineError) {
+        if (signal?.aborted) throw lineError;
+        lines.push("");
+        remaining++;
+      }
+    }
+    // 逐行也没能拿到任何一行时，抛原错误以保留 failedChunks 语义
+    if (remaining === chunk.length) throw err;
+    return { lines, incomplete: remaining > 0 };
+  }
+}
 /** 4xx（除 408/429）为确定性错误，重试无意义（如 Key 无效、模型不存在） */
 function isRetryableError(err: unknown): boolean {
+  if (err instanceof ProviderHttpError) {
+    return err.status >= 500 || err.status === 408 || err.status === 429;
+  }
   const message = err instanceof Error ? err.message : String(err || "");
   const match = message.match(/HTTP (\d{3})/);
   if (match) {
@@ -342,6 +456,14 @@ function isRetryableError(err: unknown): boolean {
     return status >= 500 || status === 408 || status === 429;
   }
   return true; // 网络 / 超时 / 解析等 → 可重试
+}
+
+/** 服务端明确给出 Retry-After 时优先听它的，否则用线性退避 */
+function retryDelayMs(err: unknown, attempt: number): number {
+  const retryAfter = err instanceof ProviderHttpError ? err.retryAfterMs : null;
+  // retry-after: 0 表示"立刻重试"，同样优先于本地退避
+  if (retryAfter !== null) return retryAfter;
+  return 500 * (attempt + 1);
 }
 
 async function retryWithBackoff<T>(
@@ -358,7 +480,12 @@ async function retryWithBackoff<T>(
     } catch (err) {
       lastError = err;
       if (!isRetryableError(err)) throw err;
-      if (attempt < retries) await sleep(500 * (attempt + 1), signal);
+      if (attempt < retries) {
+        const delay = retryDelayMs(err, attempt);
+        // 服务端要求等待过久时立即放弃：整首翻译不该被单个 chunk 卡住
+        if (delay > MAX_RETRY_DELAY_MS) throw err;
+        await sleep(delay, signal);
+      }
     }
   }
   throw lastError;
@@ -434,11 +561,13 @@ async function googlePost(
     try {
       await refreshGoogleAuthKey(signal);
     } catch {
-      throw new Error(`Google 翻译 HTTP ${res.status}`);
+      throw new ProviderHttpError(`Google 翻译 HTTP ${res.status}`, res.status);
     }
     return googlePost(texts, targetLang, signal, false);
   }
-  if (!res.ok) throw new Error(`Google 翻译 HTTP ${res.status}`);
+  if (!res.ok) {
+    throw new ProviderHttpError("Google 翻译 HTTP " + res.status, res.status, retryAfterOf(res));
+  }
   const data = await res.json();
   const out = data?.[0];
   if (!Array.isArray(out)) throw new Error("Google 翻译响应格式异常");
@@ -456,6 +585,76 @@ async function googleTranslateChunk(
     throw new Error(`Google 翻译返回行数不匹配（${result.length}/${chunk.length}）`);
   }
   return result.map((t: string) => cleanLine(t));
+}
+
+/**
+ * 整批失败时对半拆开重试，缩小失败面。
+ * Google 端点对超长/含特殊符号的批次偶发拒绝，拆半通常能过。
+ */
+async function googleTranslateChunkWithSplit(
+  chunk: string[],
+  targetLang: string,
+  signal: AbortSignal | undefined,
+  budget: FallbackBudget
+): Promise<string[]> {
+  try {
+    return await retryWithBackoff(() => googleTranslateChunk(chunk, targetLang, signal), signal);
+  } catch (err) {
+    if (signal?.aborted || !isRetryableError(err)) throw err;
+    if (chunk.length < 2 || budget.googleSplits <= 0) throw err;
+    budget.googleSplits -= 1;
+
+    translateProviderLogger.warn(`Google 批次 ${chunk.length} 行失败，拆分重试`);
+    const mid = Math.ceil(chunk.length / 2);
+    const head = await googleTranslateChunkWithSplit(
+      chunk.slice(0, mid),
+      targetLang,
+      signal,
+      budget
+    );
+    const tail = await googleTranslateChunkWithSplit(chunk.slice(mid), targetLang, signal, budget);
+    return [...head, ...tail];
+  }
+}
+
+/** 读取用户在设置里选定的并发数；越界或非法值回落到默认 3 */
+function getConcurrency(): number {
+  const value = Math.floor(Number($translationConcurrency.get()));
+  if (!Number.isFinite(value)) return DEFAULT_CONCURRENCY;
+  return Math.min(MAX_CONCURRENCY, Math.max(1, value));
+}
+
+/** 按 provider 的策略把行切成待翻译区间（含起始下标，结果写回对应位置） */
+function buildJobs(
+  lines: string[],
+  maxChunkSize: number
+): Array<{ start: number; chunk: string[] }> {
+  return planChunks(lines.length, {
+    maxChunkSize,
+    concurrency: getConcurrency(),
+    minParallelLines: MIN_PARALLEL_LINES,
+    targetLinesPerChunk: TARGET_LINES_PER_CHUNK,
+  }).map((range) => ({
+    start: range.start,
+    chunk: lines.slice(range.start, range.start + range.length),
+  }));
+}
+
+/** 并发 worker 池：最多 concurrency 个 chunk 同时在途 */
+async function runJobs<T>(
+  jobs: T[],
+  concurrency: number,
+  run: (job: T) => Promise<void>
+): Promise<void> {
+  let next = 0;
+  const workers = Array.from({ length: Math.min(concurrency, jobs.length) }, async () => {
+    while (next < jobs.length) {
+      const job = jobs[next++];
+      if (job === undefined) return;
+      await run(job);
+    }
+  });
+  await Promise.all(workers);
 }
 
 // ============================================================
@@ -479,33 +678,26 @@ export async function translateLines(
 
   const results = [...lines];
   const provider = $translationProvider.get();
+  const budget: FallbackBudget = {
+    lines: MAX_LINE_FALLBACKS_PER_RUN,
+    googleSplits: MAX_GOOGLE_SPLITS_PER_RUN,
+  };
 
   // ---- Google 免费翻译：按位置返回，无需标记 ----
   if (provider === "google") {
-    const jobs: Array<{ start: number; chunk: string[] }> = [];
-    for (let start = 0; start < lines.length; start += GOOGLE_CHUNK_SIZE) {
-      jobs.push({ start, chunk: lines.slice(start, start + GOOGLE_CHUNK_SIZE) });
-    }
-    let next = 0;
-    const workers = Array.from({ length: Math.min(PARALLEL_CHUNKS, jobs.length) }, async () => {
-      while (next < jobs.length) {
-        if (signal?.aborted) return;
-        const { start, chunk } = jobs[next++];
-        try {
-          const translated = await retryWithBackoff(
-            () => googleTranslateChunk(chunk, targetLang, signal),
-            signal
-          );
-          translated.forEach((text, i) => {
-            if (text && text !== chunk[i]) results[start + i] = text;
-          });
-        } catch (err) {
-          activeSession.failedChunks += 1;
-          translateProviderLogger.warn("Google 翻译批次失败，保留原文:", err);
-        }
+    const jobs = buildJobs(lines, GOOGLE_CHUNK_SIZE);
+    await runJobs(jobs, getConcurrency(), async ({ start, chunk }) => {
+      if (signal?.aborted) return;
+      try {
+        const translated = await googleTranslateChunkWithSplit(chunk, targetLang, signal, budget);
+        translated.forEach((text, i) => {
+          if (text && text !== chunk[i]) results[start + i] = text;
+        });
+      } catch (err) {
+        activeSession.failedChunks += 1;
+        translateProviderLogger.warn("Google 翻译批次失败，保留原文:", err);
       }
     });
-    await Promise.all(workers);
     return { lines: results, metrics: { ...activeSession } };
   }
 
@@ -516,35 +708,25 @@ export async function translateLines(
   }
   translateProviderLogger.info(`翻译后端: ${config.label} (${config.model})`);
 
-  // 预切 chunk（含起始下标，结果写回对应位置）
-  const jobs: Array<{ start: number; chunk: string[] }> = [];
-  for (let start = 0; start < lines.length; start += CHUNK_SIZE) {
-    jobs.push({ start, chunk: lines.slice(start, start + CHUNK_SIZE) });
-  }
-
-  // 并发 worker 池：最多 PARALLEL_CHUNKS 个 chunk 同时在途
-  let next = 0;
-  const workers = Array.from({ length: Math.min(PARALLEL_CHUNKS, jobs.length) }, async () => {
-    while (next < jobs.length) {
-      if (signal?.aborted) return;
-      const { start, chunk } = jobs[next++];
-      try {
-        const translated = await retryWithBackoff(
-          () => translateChunk(config, chunk, targetLang, signal),
-          signal
-        );
-        translated.forEach((text, i) => {
-          if (text && text !== chunk[i]) results[start + i] = text;
-        });
-      } catch (err) {
-        // 该组失败：保留原文，不中断整首，但记录失败以便上层重试
+  const jobs = buildJobs(lines, CHUNK_SIZE);
+  await runJobs(jobs, getConcurrency(), async ({ start, chunk }) => {
+    if (signal?.aborted) return;
+    try {
+      const translated = await translateChunkResilient(config, chunk, targetLang, signal, budget);
+      translated.lines.forEach((text, i) => {
+        if (text && text !== chunk[i]) results[start + i] = text;
+      });
+      if (translated.incomplete) {
+        // 部分行保留原文：已成功的行照常采纳，但整首仍标记为不完整以便重试
         activeSession.failedChunks += 1;
-        translateProviderLogger.warn("翻译批次失败，保留原文:", err);
+        translateProviderLogger.warn("部分行未能译出，保留原文");
       }
+    } catch (err) {
+      // 该组失败：保留原文，不中断整首，但记录失败以便上层重试
+      activeSession.failedChunks += 1;
+      translateProviderLogger.warn("翻译批次失败，保留原文:", err);
     }
   });
-
-  await Promise.all(workers);
 
   return { lines: results, metrics: { ...activeSession } };
 }

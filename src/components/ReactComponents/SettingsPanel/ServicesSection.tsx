@@ -5,10 +5,9 @@ import {
   $customApiModel,
   $deepSeekApiKey,
   $deepSeekModel,
-  $geniusApiToken,
-  $lyrivaApiKey,
   $openaiApiKey,
   $openaiModel,
+  $translationConcurrency,
   $translationProvider,
   $translationTargetLang,
 } from "../../../utils/stores.ts";
@@ -37,12 +36,11 @@ const LANG_LABELS: Record<string, string> = {
 
 const PROVIDER_OPTIONS = ["google", "deepseek", "openai", "custom"];
 const PROVIDER_LABELS = ["Google 翻译", "DeepSeek", "ChatGPT", "自定义 API"];
+const CONCURRENCY_OPTIONS = ["1", "2", "3", "4", "6"];
 // 状态值分色：已配置 = 蓝（accent），未配置 = 弱灰
 const PROVIDER_VALUE_OK = "已配置";
 
 type DetailId =
-  | "lyriva-key"
-  | "genius-token"
   | "translation-lang"
   | "deepseek-key"
   | "openai-key"
@@ -58,28 +56,24 @@ interface Props {
 export default function ServicesSection({ query, sectionFilter, onOpenDetail }: Props) {
   const translationProvider = useStore($translationProvider);
   const translationTargetLang = useStore($translationTargetLang);
+  const translationConcurrency = useStore($translationConcurrency);
   const deepSeekApiKey = useStore($deepSeekApiKey);
   const openaiApiKey = useStore($openaiApiKey);
-  const geniusApiToken = useStore($geniusApiToken);
-  const lyrivaApiKey = useStore($lyrivaApiKey);
   const customConfigured = Boolean(
     $customApiBaseUrl.get() && $customApiKey.get() && $customApiModel.get()
   );
 
   if (sectionFilter !== "All" && sectionFilter !== SECTION_NAME) return null;
 
-  const r1 = matches(query, "自动显示歌词翻译", "已有译文自动显示，无译文时按需翻译");
-  const rSource =
-    matches(query, "Lyriva API Key", "Unified API 歌词主源") ||
-    matches(query, "Genius API Token", "Genius 歌词来源 Lyriva 未命中时自动兜底");
   const rService = matches(query, "翻译服务", "Google DeepSeek ChatGPT 自定义");
   const r2 = matches(query, "翻译目标语言", "歌词翻译成哪种语言");
   const rKey =
     matches(query, "API Key", "翻译服务的 API Key") ||
     matches(query, "自定义 API", "自定义 OpenAI 兼容端点");
   const rModel = matches(query, "翻译模型", "翻译使用的模型");
+  const rConcurrency = matches(query, "翻译并发", "同时发出的请求数 限流");
 
-  if (!r1 && !rSource && !rService && !r2 && !rKey && !rModel) return null;
+  if (!rService && !r2 && !rKey && !rModel && !rConcurrency) return null;
 
   // 翻译模型行的当前值按服务显示
   const modelValue =
@@ -93,53 +87,10 @@ export default function ServicesSection({ query, sectionFilter, onOpenDetail }: 
 
   return (
     <>
-      {r1 && (
-        <div className="sl-sp-info-banner" role="note">
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 18 18"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            aria-hidden="true"
-          >
-            <circle cx="9" cy="9" r="7" stroke="currentColor" strokeWidth="1.4" />
-            <path d="M9 8v4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-            <circle cx="9" cy="5.5" r="0.8" fill="currentColor" />
-          </svg>
-          <div>
-            <strong>译文会自动显示</strong>
-            <span>歌曲没有译文时，才需要在歌词页点击翻译按钮。</span>
-          </div>
-        </div>
-      )}
-
-      {rSource && (
-        <Section
-          title="歌词来源"
-          description="Lyriva Unified API 是主源；Genius 只在主源未命中时提供静态歌词。"
-        >
-          <NavigationRow
-            label="Lyriva API Key"
-            description="启用 Lyriva Unified API 歌词服务"
-            value={lyrivaApiKey ? "已配置" : "未配置"}
-            valueState={lyrivaApiKey ? "ok" : "unset"}
-            onClick={() => onOpenDetail("lyriva-key")}
-          />
-          <NavigationRow
-            label="Genius API Token"
-            description="Lyriva 未命中时自动使用 Genius 静态歌词"
-            value={geniusApiToken ? "已配置" : "未配置"}
-            valueState={geniusApiToken ? "ok" : "unset"}
-            onClick={() => onOpenDetail("genius-token")}
-          />
-        </Section>
-      )}
-
-      {rService && (
-        <Section title="按需翻译">
+      {(rService || r2 || rKey || rModel || rConcurrency) && (
+        <Section>
           {rService && (
-            <Row label="翻译服务" stacked>
+            <Row label="翻译服务">
               <SegmentedControl
                 value={translationProvider}
                 options={PROVIDER_OPTIONS}
@@ -148,12 +99,6 @@ export default function ServicesSection({ query, sectionFilter, onOpenDetail }: 
               />
             </Row>
           )}
-        </Section>
-      )}
-
-      {/* ── 翻译配置 ── */}
-      {(r2 || rKey || rModel) && (
-        <Section title="翻译配置">
           {r2 && (
             <NavigationRow
               label="翻译目标语言"
@@ -188,24 +133,23 @@ export default function ServicesSection({ query, sectionFilter, onOpenDetail }: 
             />
           )}
 
-          {/* Google 免费翻译无需任何配置 */}
-          {translationProvider === "google" && rKey && (
-            <Row label="API Key" description="Google 免费翻译无需配置">
-              <span
-                className="sl-sp-nav-value-text"
-                style={{ color: "var(--color-text-tertiary)" }}
-              >
-                无需配置
-              </span>
-            </Row>
-          )}
-
           {rModel && translationProvider !== "google" && (
             <NavigationRow
               label="翻译模型"
               value={modelValue}
               onClick={() => onOpenDetail("translation-model")}
             />
+          )}
+
+          {rConcurrency && (
+            <Row label="翻译并发" description="同时发出的请求数；过高可能被服务端限流">
+              <SegmentedControl
+                value={String(translationConcurrency)}
+                options={CONCURRENCY_OPTIONS}
+                labels={CONCURRENCY_OPTIONS}
+                onChange={(v) => $translationConcurrency.set(Number(v))}
+              />
+            </Row>
           )}
         </Section>
       )}

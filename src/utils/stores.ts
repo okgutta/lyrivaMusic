@@ -30,6 +30,12 @@ const _settings: Record<string, any> = migrateKeys(
   saveSettingsBlob
 );
 
+// Lyrics are now public; discard the obsolete user-provided credential.
+if (Object.hasOwn(_settings, "lyrivaApiKey")) {
+  delete _settings.lyrivaApiKey;
+  saveSettingsBlob(_settings);
+}
+
 /**
  * An atom backed by the settings blob. Exported so feature modules (e.g.
  * `experiments.ts`) can register their own persisted settings without having to
@@ -89,6 +95,21 @@ export const $translationProvider = persistAtom<"google" | "deepseek" | "openai"
 );
 // 翻译目标语言（zh-CN / en / ja / …）
 export const $translationTargetLang = persistAtom<string>("translationTargetLang", "zh-CN");
+// 翻译并发请求数（1 = 串行；过高易触发服务端限流，故上限 6）
+export const $translationConcurrency = persistAtom<number>("translationConcurrency", 3);
+// 歌词显示模式，同时决定原文与译文谁当主文本：
+//   original   = 只显示原文（译文块隐藏）
+//   translated = 只显示译文（原文隐形，无译文的行整行隐藏）
+//   bilingual  = 双语（原尺寸原文 + 次级译文，历史默认行为）
+export const $lyricsTranslationDisplay = persistAtom<"original" | "translated" | "bilingual">(
+  "lyricsTranslationDisplay",
+  "bilingual"
+);
+// 逐词对照（Learning Mode）：当前行下方追加"原文词 ↔ 译文词"的推断清单。
+// 译文由整行翻译得到，没有词级对齐信息，清单是启发式推断，仅供参考。
+export const $learningMode = persistAtom<boolean>("learningMode", false);
+// 藏词自测：对照清单里遮住译文一侧，点一下才揭示（仅在逐词对照开启时有意义）
+export const $learningHideWords = persistAtom<boolean>("learningHideWords", false);
 // DeepSeek API Key（本地明文存储于设置）
 export const $deepSeekApiKey = persistAtom<string>("deepSeekApiKey", "");
 // DeepSeek 模型（deepseek-chat / deepseek-reasoner）
@@ -106,8 +127,6 @@ export const $customApiKey = persistAtom<string>("customApiKey", "");
 export const $customApiModel = persistAtom<string>("customApiModel", "");
 // Genius API Access Token（用户自填；不再硬编码进客户端 JS）
 export const $geniusApiToken = persistAtom<string>("geniusApiToken", "");
-// Lyriva Unified API Key（用户自填；本地保存，不进入构建产物）
-export const $lyrivaApiKey = persistAtom<string>("lyrivaApiKey", "");
 
 // Version atom — NOT persisted, set once at startup
 export const $spicyLyricsVersion = atom<string>(

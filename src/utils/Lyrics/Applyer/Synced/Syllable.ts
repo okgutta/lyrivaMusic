@@ -37,6 +37,8 @@ interface SyllableData {
   StartTime: number;
   EndTime: number;
   IsPartOfWord?: boolean;
+  /** Unified API tokens already carry their authoritative timing boundaries. */
+  PreserveTiming?: boolean;
 }
 
 interface LeadData {
@@ -253,6 +255,7 @@ export function ApplySyllableLyrics(data: LyricsData, UseRomanized: boolean = fa
       ).split("").length;
 
       const IfLetterCapable =
+        !lead.PreserveTiming &&
         IsLetterCapable(letterLength, totalDuration) &&
         !isRtl(
           UseRomanized && lead.TransliteratedText !== undefined

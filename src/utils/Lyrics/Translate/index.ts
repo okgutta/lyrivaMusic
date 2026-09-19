@@ -7,9 +7,13 @@
 import Logger from "../../Logger.ts";
 import {
   $currentLyricsData,
+  $customApiBaseUrl,
+  $customApiKey,
   $customApiModel,
+  $deepSeekApiKey,
   $deepSeekModel,
   $lyricsContainerExists,
+  $openaiApiKey,
   $openaiModel,
   $translationProvider,
   $translationTargetLang,
@@ -51,9 +55,27 @@ let inFlightKey = "";
 let currentAbort: AbortController | null = null;
 let requestGeneration = 0;
 let observedTargetLang = getTargetLang();
+let observedProviderConfig = providerConfigIdentity();
 
 function getTargetLang(): string {
   return $translationTargetLang.get() || "zh-CN";
+}
+
+/** In-memory comparison only; credentials are never written to cache identities. */
+function providerConfigIdentity(): string {
+  const provider = $translationProvider.get();
+  if (provider === "deepseek")
+    return JSON.stringify([provider, $deepSeekApiKey.get(), $deepSeekModel.get()]);
+  if (provider === "openai")
+    return JSON.stringify([provider, $openaiApiKey.get(), $openaiModel.get()]);
+  if (provider === "custom")
+    return JSON.stringify([
+      provider,
+      $customApiBaseUrl.get(),
+      $customApiKey.get(),
+      $customApiModel.get(),
+    ]);
+  return provider;
 }
 
 function translationText(item: any): string {
@@ -479,6 +501,32 @@ export function refreshCurrentTranslation(): void {
   const prepared = prepareLyricsForDisplay(uri, base);
   publishModel(uri, prepared, true);
 }
+
+// Cache writers use the currently selected provider. Invalidate before a late
+// response can reach either writer, even if its transport ignores cancellation.
+function onProviderConfigChanged(): void {
+  const nextConfig = providerConfigIdentity();
+  if (nextConfig === observedProviderConfig) return;
+  observedProviderConfig = nextConfig;
+  currentAbort?.abort();
+  requestGeneration++;
+  inFlightKey = "";
+  // Keep the running guard until the cancelled operation settles; provider
+  // request metrics are shared and must not overlap a new translation run.
+  refreshCurrentTranslation();
+}
+
+for (const setting of [
+  $translationProvider,
+  $deepSeekApiKey,
+  $deepSeekModel,
+  $openaiApiKey,
+  $openaiModel,
+  $customApiBaseUrl,
+  $customApiKey,
+  $customApiModel,
+])
+  setting.listen(onProviderConfigChanged);
 
 // 目标语言变化只撤掉我们挂载的旧目标译文，并同步查找新目标缓存。
 $translationTargetLang.listen((value) => {

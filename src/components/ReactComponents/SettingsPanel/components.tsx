@@ -42,9 +42,11 @@ export function Row({
             {label}
           </span>
           {description && <span className="sl-sp-description">{description}</span>}
+          {disabled && disabledReason && (
+            <span className="sl-sp-description">{disabledReason}</span>
+          )}
         </div>
         <div className="sl-sp-control">{children}</div>
-        {disabled && disabledReason && <div className="sl-sp-row-tooltip">{disabledReason}</div>}
       </div>
     </RowLabelContext.Provider>
   );
@@ -81,16 +83,19 @@ export function Section({
 export function Toggle({
   checked,
   onChange,
+  disabled,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
 }) {
   const labelId = useRowLabelId();
   return (
-    <label className="sl-sp-toggle">
+    <label className={`sl-sp-toggle${disabled ? " sl-sp-toggle--disabled" : ""}`}>
       <input
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         onChange={(e) => onChange(e.currentTarget.checked)}
         aria-labelledby={labelId}
       />
@@ -153,6 +158,27 @@ export function SegmentedControl({
       className={`sl-sp-segmented${disabled ? " sl-sp-segmented--disabled" : ""}`}
       role="radiogroup"
       aria-labelledby={labelId}
+      onKeyDown={(event) => {
+        if (
+          disabled ||
+          !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)
+        )
+          return;
+        event.preventDefault();
+        event.stopPropagation();
+        const current = Math.max(0, options.indexOf(value));
+        const next =
+          event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? options.length - 1
+              : (current +
+                  (event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : -1) +
+                  options.length) %
+                options.length;
+        onChange(options[next]);
+        event.currentTarget.querySelectorAll<HTMLButtonElement>("button")[next]?.focus();
+      }}
     >
       {options.map((opt, i) => {
         const active = opt === value;
@@ -162,6 +188,7 @@ export function SegmentedControl({
             type="button"
             role="radio"
             aria-checked={active}
+            tabIndex={active || (!options.includes(value) && i === 0) ? 0 : -1}
             disabled={disabled}
             className={`sl-sp-segmented-item${active ? " sl-sp-segmented-item--active" : ""}`}
             onClick={() => onChange(opt)}

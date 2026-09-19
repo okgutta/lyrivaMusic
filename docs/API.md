@@ -9,7 +9,7 @@ lyrivaMusic 使用两级歌词来源：
 1. **LYRIVA 主源**：使用 `https://api.lyriva.xyz` 的 Unified API，通过 `/lyriva/lyrics` 一次请求获取最终歌词模型。
 2. **Genius 兜底**：LYRIVA 未命中或暂时不可用时，使用用户在设置中配置的 Genius Access Token 搜索静态歌词；只接受 Matcher 判定为 HIGH/GOOD 的候选。
 
-设置页不再提供 NCM、QQ、LRCLIB 或 LYRIVA 地址开关。Lyriva API Key 与 Genius Token 可在「设置 → 歌词来源」中配置。
+设置页不再提供 NCM、QQ、LRCLIB 或 LYRIVA 地址开关，也无需填写 Lyriva API Key。LYRIVA 端点支持匿名访问；扩展的可选 Genius Token 仍可在设置中配置，翻译服务使用各自独立的密钥。
 
 ## LYRIVA 主源
 
@@ -28,7 +28,6 @@ GET https://api.lyriva.xyz/lyriva/lyrics
 请求头：
 
 ```http
-Authorization: Bearer <用户配置的 API Key>
 Accept: application/json
 ```
 
@@ -39,7 +38,16 @@ Accept: application/json
   "data": {
     "track": { "title": "...", "artist": "..." },
     "plainLyrics": "...",
-    "syncedLyrics": [{ "startMs": 1234, "text": "..." }],
+    "syncedLyrics": [
+      {
+        "startMs": 1234,
+        "text": "你好",
+        "words": [
+          { "startMs": 1234, "durationMs": 280, "text": "你" },
+          { "startMs": 1514, "durationMs": 360, "text": "好" }
+        ]
+      }
+    ],
     "translation": "..."
   },
   "meta": {
@@ -49,9 +57,11 @@ Accept: application/json
 }
 ```
 
-客户端会校验歌词文本、时间戳和匹配元数据；不满足可信度要求的数据不会进入渲染或持久缓存。
+`syncedLyrics[].words` 提供逐字时间轴：`startMs` 是从歌曲起点计算的绝对毫秒数，`durationMs` 是该字或词的持续毫秒数，不是相对行起点的偏移。客户端将结束时间计算为 `startMs + durationMs`，同时兼容旧响应的绝对 `endMs` 字段；两者同时存在时以 `durationMs` 为准。
 
-API Key 以明文形式保存在本机 Spicetify 设置中，不会写入构建产物。客户端优先从 Spotify 直接请求 API；如果服务端未允许 `https://xpui.app.spotify.com` Origin，则回退到 Spicetify CORS 代理。
+客户端优先使用有效逐字时间轴，逐字数据缺失或无效时回退到逐行歌词，无逐行时间轴时使用静态歌词。原始文本、空格和译文会保留。逐行歌词支持歌词源提供的整行罗马音；逐字和静态歌词暂不保证显示该字段。客户端会校验歌词文本、时间戳和匹配元数据；不满足可信度要求的数据不会进入渲染或持久缓存。
+
+LYRIVA 歌词请求不携带 API Key、`Authorization` 或 Cookie。扩展优先从 Spotify 直接请求 API；如果服务端未允许 `https://xpui.app.spotify.com` Origin，则匿名回退到 Spicetify CORS 代理。翻译服务的认证不受此变更影响。
 
 ## Genius 兜底
 
@@ -74,7 +84,7 @@ Genius 请求会区分以下状态：
 - 客户端启动和切歌时会在歌词页外预取当前歌曲；打开歌词页时优先使用内存缓存，避免再次等待网络。
 - 请求使用 generation + `AbortController` 保护；切歌、关闭页面或新请求开始时，旧请求不能更新当前页面、全局 store 或缓存。
 - `spotify:local:*`、非 track URI 和格式错误 URI 不会访问缓存或远端来源。
-- LYRIVA 无歌词且 Genius 已明确执行并确认没有结果时，才写入 NO_LYRICS 负缓存。
+- LYRIVA 明确无歌词、Genius 未配置或确认没有合格结果时，允许写入 NO_LYRICS 负缓存；来源认证失败、限流或暂时不可用不写负缓存。
 - 缓存模型会在渲染前进行运行时结构校验。
 
 ## 翻译
@@ -86,10 +96,10 @@ Genius 请求会区分以下状态：
 - ChatGPT
 - 自定义 OpenAI 兼容 API
 
-翻译缓存按 provider/track 维度隔离；切换 provider 或 API Key 会清理正在加载的模型列表并取消旧请求。
+翻译缓存记录服务和歌曲身份；整首缓存可按歌词指纹复用其他服务已完成的译文。切换服务、当前服务的密钥、模型或自定义地址时会取消正在进行的翻译，过期响应不再写入缓存。
 用户提供的 API Key 只会直连对应服务，不经过共享代理；自定义远程端点必须使用 HTTPS（本机回环地址除外）。
 
-语言识别与安全的本地增强会在歌词首帧显示后运行。客户端不再动态执行远程罗马音脚本；优先使用歌词 API 自带的罗马音，仅西里尔文字使用随扩展打包的本地转换器补全。
+语言识别与本地增强会在歌词首帧显示后运行。客户端不再动态执行远程罗马音脚本；逐行歌词可使用 API 自带的罗马音，西里尔文字可使用随扩展打包的本地转换器补全。
 
 ## 开发命令
 

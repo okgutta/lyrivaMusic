@@ -70,10 +70,10 @@ export type LyricsCacheEntry = {
 };
 
 // 缓存 Key 至少考虑 track identity + title/artist（见 matchInfo 校验）。
-// g3 → g4：失效旧版映射器写入的无译文模型，使 LYRIVA 自带译文能重新拉取并自动显示。
+// g4 → g5：旧模型丢弃了逐字时间，重新请求以保留后端逐字歌词。
 export const LyricsStore = GetExpireStore<LyricsCacheEntry>(
-  "SpicyLyrics_LyricsStore_g4",
-  4,
+  "SpicyLyrics_LyricsStore_g5",
+  5,
   { Unit: "Days", Duration: 3 },
   isDev as true
 );
@@ -724,12 +724,10 @@ async function fetchLyricsInner(
     return ["lyrics-not-found", 404];
   }
 
-  // ===== skipped（未配 key）/ unavailable（限流、超时、鉴权、服务端）=====
+  // ===== unavailable（限流、超时、服务端）=====
   // 不写负缓存：下首歌或重试仍有机会成功（避免把瞬时故障固化为「无歌词」）。
   // Genius 兜底也未命中才会走到这里。
-  if (result.kind === "skipped") {
-    lyricsLogger.warn("LYRIVA API Key 未配置，自动歌词获取跳过");
-  } else if (result.kind === "unavailable") {
+  if (result.kind === "unavailable") {
     lyricsLogger.warn(`LYRIVA 不可用：${result.reason}`);
   } else {
     lyricsLogger.warn("歌词来源均未返回可用歌词");
@@ -739,12 +737,7 @@ async function fetchLyricsInner(
   recordCurrentDiagnostic({
     level: "error",
     title: "歌词获取失败",
-    detail:
-      result.kind === "unavailable"
-        ? result.reason
-        : result.kind === "skipped"
-          ? "LYRIVA 服务未配置"
-          : "歌词来源暂时不可用",
+    detail: result.kind === "unavailable" ? result.reason : "歌词来源暂时不可用",
     source: "歌词来源",
     durationMs: requestDuration,
     uri,

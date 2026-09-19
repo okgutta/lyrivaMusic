@@ -1,7 +1,8 @@
 // LYRIVA 响应 → LyricsPayload 映射（纯函数，无 Spicetify/浏览器依赖，可直接 Node 单测）
-// 输入：LYRIVA Unified API 的 `data` 字段 + target；输出：Line/Static 歌词模型或 null（无词）。
+// 输入：LYRIVA Unified API 的 `data` 字段 + target；输出：Syllable/Line/Static 歌词模型。
 import { parseLrc } from "../ncm/parseLrc.ts";
 import { splitArtists, type LyricsPayload, type MatchLevel, type TargetTrack } from "./matcher.ts";
+import { normalizeWordTiming } from "./wordTiming.ts";
 
 /** 至少要有 3 行同步歌词才采信为 Line 模型，否则回退 Static（或视为无词） */
 const MIN_LINES = 3;
@@ -160,17 +161,26 @@ export function buildLyrivaModelFromResponse(
   return buildLyrivaModel(data, target, response?.meta);
 }
 
-/** LYRIVA `data` → LyricsPayload（Line 优先，回退 Static）。无可用词返回 null。 */
+/** LYRIVA `data` → LyricsPayload（优先逐字，再逐行，最后纯文本）。 */
 export function buildLyrivaModel(
   data: any,
   target: TargetTrack,
   responseMeta?: any
 ): LyricsPayload | null {
   const synced = Array.isArray(data?.syncedLyrics) ? data.syncedLyrics : [];
-  const rows = synced
+  const rows: Array<{
+    startMs: number;
+    text: string;
+    durationMs?: unknown;
+    words?: unknown;
+    romanization?: unknown;
+  }> = synced
     .map((s: any) => ({
       startMs: Number(s?.startMs),
       text: typeof s?.text === "string" ? s.text.trim() : "",
+      durationMs: s?.durationMs,
+      words: s?.words,
+      romanization: s?.romanization ?? s?.transliteration,
     }))
     .filter(
       (r: { startMs: number; text: string }) =>
@@ -213,25 +223,89 @@ export function buildLyrivaModel(
     savedAt: Date.now(),
   };
 
-  // 同步歌词充足 → Line 模型（EndTime 取下一行起点，末行 +4s；单位秒）
+  // 保留上游声明的行时长与字时长；仅缺少行时长时使用下一行起点。
   if (rows.length >= MIN_LINES) {
     const translations = mapTranslations(
       data?.translation,
       rows.map((r: { startMs: number }) => r.startMs)
     );
-    const Content = rows.map((r: { startMs: number; text: string }, i: number) => {
-      const endMs = i + 1 < rows.length ? rows[i + 1].startMs : r.startMs + 4000;
-      const translation = translations[i];
-      return {
-        Type: "Vocal",
-        Text: r.text,
-        StartTime: r.startMs / 1000,
-        EndTime: endMs / 1000,
-        ...(translation ? { Translation: translation } : {}),
-      };
-    });
+    const romanizations = mapTranslations(
+      data?.romanization ?? data?.transliteration,
+      rows.map((r: { startMs: number }) => r.startMs)
+    );
+    const mapped = rows.map(
+      (
+        r: {
+          startMs: number;
+          text: string;
+          durationMs?: unknown;
+          words?: unknown;
+          romanization?: unknown;
+        },
+        i: number
+      ) => {
+        let endMs =
+          typeof r.durationMs === "number" && Number.isFinite(r.durationMs) && r.durationMs >= 0
+            ? r.startMs + r.durationMs
+            : i + 1 < rows.length
+              ? rows[i + 1].startMs
+              : Math.max(r.startMs, Math.min(target.durationMs ?? Infinity, r.startMs + 4000));
+        const words = normalizeWordTiming(
+          r.words,
+          { text: r.text, startMs: r.startMs, endMs },
+          target.durationMs
+        );
+        if (words) endMs = Math.max(endMs, ...words.map((word) => word.endMs));
+        const translation = translations[i];
+        const romanization = typeof r.romanization === "string" ? r.romanization : romanizations[i];
+        return {
+          Type: "Vocal",
+          Text: r.text,
+          StartTime: r.startMs / 1000,
+          EndTime: endMs / 1000,
+          ...(translation ? { Translation: translation } : {}),
+          ...(romanization ? { TransliteratedText: romanization } : {}),
+          words,
+        };
+      }
+    );
+    const hasWords = mapped.some((line: { words?: unknown }) => line.words);
+    const Content = mapped.map(({ words, ...line }: (typeof mapped)[number]) => ({
+      ...line,
+      ...(hasWords
+        ? {
+            Lead: {
+              StartTime: line.StartTime,
+              EndTime: line.EndTime,
+              // Mixed responses contain credits or ordinary timed rows. Keep those
+              // as one intact timed line instead of splitting them into fake words.
+              Syllables: words
+                ? words.map((word, index) => ({
+                    Text: word.text.trim(),
+                    StartTime: word.startMs / 1000,
+                    EndTime: word.endMs / 1000,
+                    PreserveTiming: true,
+                    IsPartOfWord: index < words.length - 1 && !/\s$/.test(word.text),
+                  }))
+                : [
+                    {
+                      Text: line.Text,
+                      StartTime: line.StartTime,
+                      EndTime: line.EndTime,
+                      PreserveTiming: true,
+                      ...(line.TransliteratedText
+                        ? { TransliteratedText: line.TransliteratedText }
+                        : {}),
+                    },
+                  ],
+            },
+          }
+        : {}),
+    }));
     return {
-      Type: "Line",
+      Type: hasWords ? "Syllable" : "Line",
+      StartTime: Content[0].StartTime,
+      EndTime: Math.max(...Content.map((line: { EndTime: number }) => line.EndTime)),
       Content,
       uri: target.uri,
       source: "lyriva",

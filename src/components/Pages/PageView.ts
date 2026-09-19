@@ -20,6 +20,7 @@ import {
   $currentLyricsData,
   $lineHoverBackground,
   $lyricsContainerExists,
+  $lyricsTranslationDisplay,
   $minimalLyricsMode,
   $showVolumeSlider,
   $simpleLyricsMode,
@@ -47,6 +48,7 @@ import {
 import TransferElement from "../Utils/TransferElement.ts";
 import { IsPIP, _IsPIP_after, ClosePopupLyrics } from "../Utils/PopupLyrics.ts";
 import { NPVCardOwnsPage, DeRenderNPVCard } from "../Utils/NPVLyrics.ts";
+import { createViewControlTooltip } from "../Utils/ViewControlTooltip.ts";
 import { CleanUpIsByCommunity } from "../../utils/Lyrics/Applyer/Credits/ApplyIsByCommunity.tsx";
 import { openSettingsPanel } from "../../utils/settings.ts";
 import Logger from "../../utils/Logger.ts";
@@ -205,6 +207,9 @@ async function OpenPage(
   if ($showVolumeSlider.get()) {
     elem.classList.add("ShowVolumeSlider");
   }
+
+  // 译文显示模式：三个互斥类，纯 CSS 决定原文/译文谁可见（默认双语 = 历史行为）。
+  ApplyTranslationDisplayClasses(elem, $lyricsTranslationDisplay.get());
 
   ApplyExperimentClasses(elem);
 
@@ -450,18 +455,18 @@ function AppendViewControls(ReAppend: boolean = false) {
             ? ""
             : IsPIP
               ? ""
-              : `<button id="CinemaView" class="ViewControl">${Icons.CinemaView}</button>`
+              : `<button id="CinemaView" type="button" class="ViewControl" aria-label="影院视图">${Icons.CinemaView}</button>`
         }
         ${
           Fullscreen.IsOpen || Fullscreen.CinemaViewOpen
             ? IsPIP
               ? ""
-              : `<button id="CompactModeToggle" class="ViewControl">${
+              : `<button id="CompactModeToggle" type="button" class="ViewControl" aria-label="${IsCompactMode() ? "退出紧凑模式" : "进入紧凑模式"}">${
                   IsCompactMode() ? Icons.DisableCompactModeIcon : Icons.EnableCompactModeIcon
                 }</button>`
             : ""
         }
-        <button id="RomanizationToggle" class="ViewControl">
+        <button id="RomanizationToggle" type="button" class="ViewControl" aria-label="${isRomanized ? "关闭罗马音" : "启用罗马音"}">
           ${isRomanized ? Icons.DisableRomanization : Icons.EnableRomanization}
         </button>
         <button id="TranslateToggle" type="button"
@@ -476,27 +481,27 @@ function AppendViewControls(ReAppend: boolean = false) {
           !Fullscreen.IsOpen && !Fullscreen.CinemaViewOpen
             ? IsPIP
               ? ""
-              : `<button id="NowBarToggle" class="ViewControl">${Icons.NowBar}</button>`
+              : `<button id="NowBarToggle" type="button" class="ViewControl" aria-label="顶部信息栏">${Icons.NowBar}</button>`
             : ""
         }
         ${
           NowBarObj.Open
             ? IsPIP
               ? ""
-              : `<button id="NowBarSideToggle" class="ViewControl">${Icons.NowBarSideSwap}</button>`
+              : `<button id="NowBarSideToggle" type="button" class="ViewControl" aria-label="交换顶部信息栏位置">${Icons.NowBarSideSwap}</button>`
             : ""
         }
         ${
           Fullscreen.IsOpen
             ? IsPIP
               ? ""
-              : `<button id="FullscreenToggle" class="ViewControl">${
+              : `<button id="FullscreenToggle" type="button" class="ViewControl" aria-label="${Fullscreen.CinemaViewOpen ? "全屏" : "影院视图"}">${
                   Fullscreen.CinemaViewOpen ? Icons.Fullscreen : Icons.CloseFullscreen
                 }</button>`
             : ""
         }
-        ${IsPIP ? "" : `<button id="SettingsToggle" class="ViewControl">${Icons.Settings}</button>`}
-        <button id="Close" class="ViewControl">${Icons.Close}</button>
+        ${IsPIP ? "" : `<button id="SettingsToggle" type="button" class="ViewControl" aria-label="打开设置">${Icons.Settings}</button>`}
+        <button id="Close" type="button" class="ViewControl" aria-label="关闭页面">${Icons.Close}</button>
     `;
 
   let targetElem: HTMLElement | null = elem;
@@ -533,10 +538,7 @@ function AppendViewControls(ReAppend: boolean = false) {
     if (closeButton) {
       try {
         if (!isPip) {
-          Tooltips.Close = Spicetify.Tippy(closeButton, {
-            ...Spicetify.TippyProps,
-            content: `关闭页面`,
-          });
+          Tooltips.Close = createViewControlTooltip(closeButton, "关闭页面");
         }
         closeButton.addEventListener("click", async () => {
           if (IsPIP) {
@@ -560,10 +562,10 @@ function AppendViewControls(ReAppend: boolean = false) {
     if (compactModeToggle) {
       try {
         if (!isPip) {
-          Tooltips.CompactMode = Spicetify.Tippy(compactModeToggle, {
-            ...Spicetify.TippyProps,
-            content: `${IsCompactMode() ? "退出紧凑模式" : "进入紧凑模式"}`,
-          });
+          Tooltips.CompactMode = createViewControlTooltip(
+            compactModeToggle,
+            IsCompactMode() ? "退出紧凑模式" : "进入紧凑模式"
+          );
         }
         compactModeToggle.addEventListener("click", () => {
           // Use PageContainer instead of document.querySelector
@@ -593,10 +595,10 @@ function AppendViewControls(ReAppend: boolean = false) {
     if (romanizationToggle) {
       try {
         if (!isPip) {
-          Tooltips.Romanization = Spicetify.Tippy(romanizationToggle, {
-            ...Spicetify.TippyProps,
-            content: isRomanized ? `关闭罗马音` : `启用罗马音`,
-          });
+          Tooltips.Romanization = createViewControlTooltip(
+            romanizationToggle,
+            isRomanized ? "关闭罗马音" : "启用罗马音"
+          );
         }
         romanizationToggle.addEventListener("click", async () => {
           const songUri = SpotifyPlayer.GetUri();
@@ -628,10 +630,10 @@ function AppendViewControls(ReAppend: boolean = false) {
     if (translateToggle) {
       if (!isPip) {
         try {
-          Tooltips.Translate = Spicetify.Tippy(translateToggle, {
-            ...Spicetify.TippyProps,
-            content: translationControlPresentation($translationState.get()).label,
-          });
+          Tooltips.Translate = createViewControlTooltip(
+            translateToggle,
+            translationControlPresentation($translationState.get()).label
+          );
         } catch (err) {
           controlsLogger.warn("Failed to setup Translate tooltip", err);
         }
@@ -649,10 +651,7 @@ function AppendViewControls(ReAppend: boolean = false) {
       if (nowBarButton) {
         try {
           if (!isPip) {
-            Tooltips.NowBarToggle = Spicetify.Tippy(nowBarButton, {
-              ...Spicetify.TippyProps,
-              content: `顶部信息栏`,
-            });
+            Tooltips.NowBarToggle = createViewControlTooltip(nowBarButton, "顶部信息栏");
           }
           nowBarButton.addEventListener("click", () => ToggleNowBar());
         } catch (err) {
@@ -665,10 +664,10 @@ function AppendViewControls(ReAppend: boolean = false) {
     if (fullscreenBtn) {
       try {
         if (!isPip) {
-          Tooltips.FullscreenToggle = Spicetify.Tippy(fullscreenBtn, {
-            ...Spicetify.TippyProps,
-            content: `${Fullscreen.CinemaViewOpen ? "全屏" : "影院视图"}`,
-          });
+          Tooltips.FullscreenToggle = createViewControlTooltip(
+            fullscreenBtn,
+            Fullscreen.CinemaViewOpen ? "全屏" : "影院视图"
+          );
         }
         fullscreenBtn.addEventListener("click", async () => {
           // If we're in cinema view, go to full fullscreen
@@ -692,10 +691,7 @@ function AppendViewControls(ReAppend: boolean = false) {
     if (cinemaViewBtn && !Fullscreen.IsOpen) {
       try {
         if (!isPip) {
-          Tooltips.CinemaView = Spicetify.Tippy(cinemaViewBtn, {
-            ...Spicetify.TippyProps,
-            content: `影院视图`,
-          });
+          Tooltips.CinemaView = createViewControlTooltip(cinemaViewBtn, "影院视图");
         }
         cinemaViewBtn.addEventListener("click", async () => {
           Fullscreen.Open(true);
@@ -713,10 +709,10 @@ function AppendViewControls(ReAppend: boolean = false) {
     ) {
       try {
         if (!isPip) {
-          Tooltips.NowBarSideToggle = Spicetify.Tippy(nowBarSideToggleBtn, {
-            ...Spicetify.TippyProps,
-            content: `交换顶部信息栏位置`,
-          });
+          Tooltips.NowBarSideToggle = createViewControlTooltip(
+            nowBarSideToggleBtn,
+            "交换顶部信息栏位置"
+          );
         }
         nowBarSideToggleBtn.addEventListener("click", () => NowBar_SwapSides());
       } catch (err) {
@@ -727,11 +723,9 @@ function AppendViewControls(ReAppend: boolean = false) {
     const settingsButton = elem.querySelector("#SettingsToggle");
     if (settingsButton && !isPip) {
       try {
-        Tooltips.Settings = Spicetify.Tippy(settingsButton, {
-          ...Spicetify.TippyProps,
-          content: `lyrivaMusic 设置`,
-        });
+        Tooltips.Settings = createViewControlTooltip(settingsButton, "打开设置");
         settingsButton.addEventListener("click", () => {
+          Tooltips.Settings?.hide();
           openSettingsPanel();
         });
       } catch (err) {
@@ -739,6 +733,19 @@ function AppendViewControls(ReAppend: boolean = false) {
       }
     }
   }
+}
+
+/**
+ * 译文显示模式互斥类：CSS 依据这三个类决定原文/译文的可见性。
+ * 只挂类、不改 DOM，所以切换时不需要重建歌词容器。
+ */
+function ApplyTranslationDisplayClasses(
+  elem: HTMLElement,
+  display: "original" | "translated" | "bilingual"
+): void {
+  elem.classList.toggle("DisplayOriginal", display === "original");
+  elem.classList.toggle("DisplayTranslated", display === "translated");
+  elem.classList.toggle("DisplayBilingual", display === "bilingual");
 }
 
 // --- Reactive setting subscriptions ---
@@ -775,6 +782,14 @@ $minimalLyricsMode.listen((v) => {
 $lineHoverBackground.listen((v) => {
   if (!PageContainer) return;
   PageContainer.classList.toggle("NoLineHoverBackground", !v);
+});
+
+// 同样是纯 CSS 切换：类一变，"仅原文/仅译文"的隐藏规则立刻生效。
+// 隐藏/显示译文块会改变行高，所以需要让虚拟化器重新测量一次。
+$lyricsTranslationDisplay.listen((v) => {
+  if (!PageContainer) return;
+  ApplyTranslationDisplayClasses(PageContainer, v);
+  triggerRemeasureLV();
 });
 
 $skipSpicyFont.listen((v) => {

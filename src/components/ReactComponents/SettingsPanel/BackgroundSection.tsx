@@ -9,7 +9,7 @@ import { matches, Row, Section, SegmentedControl, Slider, Toggle } from "./compo
 
 const SECTION_NAME = "appearance";
 const bgModeOptions = ["off", "auto", "artistHeader", "coverArt", "color"];
-const bgModeLabels = ["关闭", "自动", "艺人头图", "封面", "纯色"];
+const bgModeLabels = ["动态", "自动", "艺人头图", "封面", "纯色"];
 
 interface Props {
   query: string;
@@ -24,8 +24,16 @@ export default function BackgroundSection({ query, sectionFilter }: Props) {
 
   if (sectionFilter !== "All" && sectionFilter !== SECTION_NAME) return null;
 
-  const r1 = matches(query, "静态背景", "将背景固定为图片或纯色，而不是动态动画。");
-  const r2 = matches(query, "正在播放面板显示动态背景", "在正在播放面板中显示动画背景。");
+  const r1 = matches(
+    query,
+    "背景模式 静态背景",
+    "动态 自动 艺人头图 封面 纯色 关闭静态背景后使用动态背景"
+  );
+  const r2 = matches(
+    query,
+    "播放面板动态背景 正在播放面板显示动态背景",
+    "在正在播放面板中显示动画背景。"
+  );
   const blurApplies = staticBackgroundMode !== "off" && staticBackgroundMode !== "color";
   const r3 = blurApplies && matches(query, "背景模糊", "柔化静态背景图片。");
   const r4 = matches(query, "使用系统字体", "不加载 lyrivaMusic 内置字体，跟随 Spotify 当前字体。");
@@ -33,7 +41,7 @@ export default function BackgroundSection({ query, sectionFilter }: Props) {
   if (!r1 && !r2 && !r3 && !r4) return null;
 
   return (
-    <Section title="背景">
+    <Section>
       {r1 && (
         <Row label="背景模式" stacked>
           <SegmentedControl
