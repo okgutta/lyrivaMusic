@@ -1,6 +1,6 @@
 # Marketplace 发布说明
 
-lyrivaMusic 正在准备 Spicetify Marketplace 发布，尚未确认正式收录。仓库 Topic 尚待添加，Spotify 中的 Marketplace 安装尚未实测；当前可使用 [README 中的手动安装方式](../README.md#手动安装)。
+仓库已配置 `spicetify-extensions` Topic、发布清单与真实预览图。Spotify 中的 Marketplace 安装尚未实测；如暂时无法搜索到扩展，可使用 [README 中的手动安装方式](../README.md#手动安装)。
 
 ## 官方规则
 
