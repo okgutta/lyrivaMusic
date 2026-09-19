@@ -5,6 +5,7 @@
  *  - 目标语言变化只读取对应缓存，不自动消耗翻译额度。
  */
 import Logger from "../../Logger.ts";
+import { notify } from "../../notify.ts";
 import {
   $currentLyricsData,
   $customApiBaseUrl,
@@ -276,14 +277,6 @@ export function resetTranslationForTrack(uri: string): void {
   ownedIndexes = new Set();
   lastModel = null;
   updateState("unavailable");
-}
-
-function notify(message: string, isError = false): void {
-  try {
-    Spicetify.showNotification(message, isError);
-  } catch {
-    // Spotify 页面卸载期间通知 API 可能不可用。
-  }
 }
 
 function providerMetadata(): { api: string; model?: string } {

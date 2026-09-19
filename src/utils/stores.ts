@@ -105,11 +105,6 @@ export const $lyricsTranslationDisplay = persistAtom<"original" | "translated" |
   "lyricsTranslationDisplay",
   "bilingual"
 );
-// 逐词对照（Learning Mode）：当前行下方追加"原文词 ↔ 译文词"的推断清单。
-// 译文由整行翻译得到，没有词级对齐信息，清单是启发式推断，仅供参考。
-export const $learningMode = persistAtom<boolean>("learningMode", false);
-// 藏词自测：对照清单里遮住译文一侧，点一下才揭示（仅在逐词对照开启时有意义）
-export const $learningHideWords = persistAtom<boolean>("learningHideWords", false);
 // DeepSeek API Key（本地明文存储于设置）
 export const $deepSeekApiKey = persistAtom<string>("deepSeekApiKey", "");
 // DeepSeek 模型（deepseek-chat / deepseek-reasoner）

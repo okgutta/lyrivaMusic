@@ -1,0 +1,67 @@
+#SpicyLyricsPage .ContentBox .LyricsContainer .LyricsContent .LyricsNotice .notice-detail {
+  max-width: 34em;
+  margin: 12px 0 0;
+  color: var(--color-text-secondary, rgb(255 255 255 / 68%));
+  font-size: clamp(13px, 2cqw, 16px);
+  font-weight: 400;
+  line-height: 1.6;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+#SpicyLyricsPage .ContentBox .LyricsContainer .LyricsContent .lyrics-notice-retry {
+  min-height: 40px;
+  margin-top: 22px;
+  padding: 9px 22px;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 10%);
+  color: var(--color-text-primary, #fff);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition:
+    background-color 140ms ease,
+    transform 140ms ease;
+}
+
+#SpicyLyricsPage
+  .ContentBox
+  .LyricsContainer
+  .LyricsContent
+  .lyrics-notice-retry:hover:not(:disabled) {
+  background: rgb(255 255 255 / 18%);
+}
+
+#SpicyLyricsPage
+  .ContentBox
+  .LyricsContainer
+  .LyricsContent
+  .lyrics-notice-retry:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+#SpicyLyricsPage .ContentBox .LyricsContainer .LyricsContent .lyrics-notice-retry:focus-visible {
+  outline: 2px solid var(--color-text-primary, #fff);
+  outline-offset: 4px;
+}
+
+#SpicyLyricsPage .ContentBox .LyricsContainer .LyricsContent .lyrics-notice-retry:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #SpicyLyricsPage .ContentBox .LyricsContainer .LyricsContent .lyrics-notice-retry,
+  #SpicyLyricsPage
+    .ContentBox
+    .LyricsContainer
+    .LyricsContent
+    .lyrics-notice-retry:active:not(:disabled) {
+    transition: none;
+    transform: none;
+  }
+}

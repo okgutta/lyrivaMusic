@@ -1,30 +1,29 @@
 import { SpotifyPlayer } from "../components/Global/SpotifyPlayer.ts";
-import PageView from "../components/Pages/PageView.ts";
-import { toast } from "sonner";
-import fetchLyrics, { LyricsStore } from "./Lyrics/fetchLyrics.ts";
+import PageView, { PageContainer } from "../components/Pages/PageView.ts";
+import { notify } from "./notify.ts";
+import fetchLyrics, { clearLyricsCacheForTrack, LyricsStore } from "./Lyrics/fetchLyrics.ts";
 import ApplyLyrics from "./Lyrics/Global/Applyer.ts";
 import { $currentLyricsData } from "./stores.ts";
 
 export const RemoveCurrentLyrics_AllCaches = async (quiet: boolean = false) => {
-  const currentSongId = SpotifyPlayer.GetId();
-  if (!currentSongId || currentSongId === undefined) {
-    if (!quiet) toast.error(`无法获取当前歌曲的 ID`);
+  const uri = SpotifyPlayer.GetUri();
+  if (!uri || !/^spotify:track:[^:]+$/.test(uri)) {
+    if (!quiet) notify("无法获取当前歌曲的 ID", true);
     return;
   }
   try {
-    await LyricsStore.RemoveItem(currentSongId);
-    $currentLyricsData.set("");
-    if (!quiet) toast.success(`当前歌曲的歌词已从所有缓存中移除`);
-    if (PageView.IsOpened) {
-      const uri = SpotifyPlayer.GetUri();
-      if (uri && uri !== undefined) {
-        void fetchLyrics(uri)
-          .then(ApplyLyrics)
-          .catch((error) => console.error("SpicyLyrics: failed to reload lyrics", error));
+    const page = PageContainer;
+    if (PageView.IsOpened && page) {
+      const result = await fetchLyrics(uri, { forceRefresh: true });
+      if (PageView.IsOpened && PageContainer === page && SpotifyPlayer.GetUri() === uri) {
+        await ApplyLyrics(result);
       }
+    } else {
+      await clearLyricsCacheForTrack(uri);
     }
+    if (!quiet) notify("已清除当前歌曲缓存");
   } catch (error) {
-    if (!quiet) toast.error(`当前歌曲的歌词无法从所有缓存中移除。请查看控制台获取更多信息。`);
+    if (!quiet) notify("无法清除当前歌曲缓存，请稍后重试", true);
     console.error("SpicyLyrics:", error);
   }
 };
@@ -32,7 +31,7 @@ export const RemoveCurrentLyrics_AllCaches = async (quiet: boolean = false) => {
 export const RemoveLyricsCache = async (quiet: boolean = false) => {
   try {
     await LyricsStore.Destroy();
-    if (!quiet) toast.success("歌词缓存已成功清除");
+    if (!quiet) notify("已清除全部歌词缓存");
     if (PageView.IsOpened) {
       const uri = SpotifyPlayer.GetUri();
       if (uri && uri !== undefined) {
@@ -42,7 +41,7 @@ export const RemoveLyricsCache = async (quiet: boolean = false) => {
       }
     }
   } catch (error) {
-    if (!quiet) toast.error(`歌词缓存无法清除。请查看控制台获取更多信息。`);
+    if (!quiet) notify("无法清除歌词缓存，请稍后重试", true);
     console.error("SpicyLyrics:", error);
   }
 };
@@ -50,7 +49,7 @@ export const RemoveLyricsCache = async (quiet: boolean = false) => {
 export const RemoveCurrentLyrics_StateCache = (quiet: boolean = false) => {
   try {
     $currentLyricsData.set("");
-    if (!quiet) toast.success("当前歌曲的歌词已成功从内部状态中移除");
+    if (!quiet) notify("已清除当前歌曲的临时歌词");
     if (PageView.IsOpened) {
       const uri = SpotifyPlayer.GetUri();
       if (uri && uri !== undefined) {
@@ -60,7 +59,7 @@ export const RemoveCurrentLyrics_StateCache = (quiet: boolean = false) => {
       }
     }
   } catch (error) {
-    if (!quiet) toast.error(`当前歌曲的歌词无法从内部状态中移除。请查看控制台获取更多信息。`);
+    if (!quiet) notify("无法清除当前歌曲的临时歌词，请稍后重试", true);
     console.error("SpicyLyrics:", error);
   }
 };

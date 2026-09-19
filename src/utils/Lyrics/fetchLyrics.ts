@@ -19,6 +19,7 @@ import { tryLyrivaLyrics, type LyrivaResult } from "./lyriva.ts";
 import { geniusProvider } from "./providers/genius.ts";
 import Global from "../../components/Global/Global.ts";
 import { PrefetchMissCache } from "./PrefetchMissCache.ts";
+import { classifyLyricsFailure, type LyricsFailureKind } from "./lyricsFailure.ts";
 import {
   recordCacheDiagnostic,
   recordCurrentDiagnostic,
@@ -47,6 +48,49 @@ type InflightLyricsPrefetch = {
 };
 const inflightLyricsPrefetches = new Map<string, InflightLyricsPrefetch>();
 const recentLyrivaPrefetchMisses = new PrefetchMissCache();
+
+type LyricsResult = [object | string, number];
+type RequestContext = { uri: string; generation: number; failure?: LyricsFailureKind };
+const resultContexts = new WeakMap<LyricsResult, RequestContext>();
+const cacheMutations = new Map<string, Promise<unknown>>();
+
+/** Keep the existing tuple contract while protecting string notices from stale requests. */
+export function isCurrentLyricsResult(result: LyricsResult): boolean {
+  const context = resultContexts.get(result);
+  return !context || isActiveRequest(context.generation, context.uri);
+}
+
+export function getLyricsFailure(result: LyricsResult): LyricsFailureKind | undefined {
+  return resultContexts.get(result)?.failure;
+}
+
+function mutateLyricsCache<T>(trackId: string, action: () => Promise<T>): Promise<T> {
+  const previous = cacheMutations.get(trackId) ?? Promise.resolve();
+  const task = previous.catch(() => {}).then(action);
+  cacheMutations.set(trackId, task);
+  const finish = () => {
+    if (cacheMutations.get(trackId) === task) cacheMutations.delete(trackId);
+  };
+  void task.then(finish, finish);
+  return task;
+}
+
+function invalidateTrackCaches(uri: string): void {
+  recentLyrivaPrefetchMisses.clear(uri);
+  inflightLyricsPrefetches.get(uri)?.controller.abort();
+  if (SpotifyPlayer.GetUri() === uri) $currentLyricsData.set("");
+}
+
+/** Used when clearing caches with the lyrics page closed. */
+export async function clearLyricsCacheForTrack(uri: string): Promise<void> {
+  if (!/^spotify:track:[^:]+$/.test(uri)) return;
+  if (SpotifyPlayer.GetUri() === uri) cancelLyricsFetch();
+  else inflightFetches.get(uri)?.controller.abort();
+  invalidateTrackCaches(uri);
+  await mutateLyricsCache(uri.slice("spotify:track:".length), () =>
+    LyricsStore.RemoveItem(uri.slice("spotify:track:".length))
+  );
+}
 
 function isTrackUri(uri: string): boolean {
   return /^spotify:track:[^:]+$/.test(uri) || uri.startsWith("spotify:local:");
@@ -191,17 +235,21 @@ const backgroundFinalizations = new Map<string, Promise<void>>();
 async function persistLyricsModel(
   model: LyricsPayload,
   trackId: string,
-  uri: string
+  uri: string,
+  canWrite: () => boolean
 ): Promise<boolean> {
-  if (!LyricsStore) return false;
+  if (!LyricsStore || !canWrite()) return false;
   try {
     const storeEntry: LyricsCacheEntry = {
       model,
       uri,
       matchInfo: model.matchInfo as LyricsCacheEntry["matchInfo"],
     };
-    await LyricsStore.SetItem(trackId, storeEntry);
-    return true;
+    return await mutateLyricsCache(trackId, async () => {
+      if (!canWrite()) return false;
+      await LyricsStore.SetItem(trackId, storeEntry);
+      return true;
+    });
   } catch (error) {
     lyricsCacheLogger.error("Error saving lyrics to cache", error);
     return false;
@@ -227,7 +275,9 @@ async function finalizeLyricsInBackground(
 
   // Persist the valid raw model before optional language/romanization work. A
   // failed enhancement must not force the next play to repeat the network wait.
-  await persistLyricsModel(model, trackId, uri);
+  if (!isActiveRequest(gen, uri, signal)) return;
+  const canWrite = () => isActiveRequest(gen, uri, signal);
+  await persistLyricsModel(model, trackId, uri, canWrite);
   if (!isActiveRequest(gen, uri, signal)) return;
 
   let appliedRomanization = false;
@@ -250,7 +300,7 @@ async function finalizeLyricsInBackground(
   }
 
   // Refresh the entry with any successfully generated transliterations.
-  await persistLyricsModel(model, trackId, uri);
+  await persistLyricsModel(model, trackId, uri, canWrite);
 }
 
 function scheduleLyricsFinalization(
@@ -309,7 +359,13 @@ async function prefetchLyricsInner(
   if (result.kind === "ok") {
     recentLyrivaPrefetchMisses.clear(target.uri);
     result.model.uri = target.uri;
-    const persisted = await persistLyricsModel(result.model, trackId, target.uri);
+    const persisted = await persistLyricsModel(
+      result.model,
+      trackId,
+      target.uri,
+      () => !signal.aborted
+    );
+    if (signal.aborted) return "aborted";
     if (persisted) {
       lyricsCacheLogger.debug("下一首歌词已预取", target.uri);
       return "fetched";
@@ -381,14 +437,32 @@ export function cancelLyricsFetch(): void {
   HideLoaderContainer();
 }
 
-export default async function fetchLyrics(uri: string): Promise<[object | string, number] | null> {
+export default async function fetchLyrics(
+  uri: string,
+  options: { forceRefresh?: boolean } = {}
+): Promise<LyricsResult | null> {
   if (!isTrackUri(uri)) {
     lyricsLogger.debug("Ignoring malformed track URI", uri);
     return null;
   }
+  // A stale retry button must not cancel the current song's request or erase its cache.
+  if (SpotifyPlayer.GetUri() !== uri) return null;
+  if (
+    options.forceRefresh &&
+    (!/^spotify:track:[^:]+$/.test(uri) ||
+      SpotifyPlayer.IsDJ() ||
+      SpotifyPlayer.GetContentType() !== "track" ||
+      (SpotifyPlayer.GetMediaType() && SpotifyPlayer.GetMediaType() !== "audio"))
+  )
+    return null;
   abortLyricsPrefetchesExcept(uri);
   const existing = inflightFetches.get(uri);
-  if (existing && existing.generation === lyricsGeneration && !existing.controller.signal.aborted) {
+  if (
+    !options.forceRefresh &&
+    existing &&
+    existing.generation === lyricsGeneration &&
+    !existing.controller.signal.aborted
+  ) {
     lyricsLogger.debug("In-flight hit, reusing request", uri);
     return existing.promise;
   }
@@ -400,14 +474,19 @@ export default async function fetchLyrics(uri: string): Promise<[object | string
   currentFetchAbort?.abort();
   const controller = new AbortController();
   currentFetchAbort = controller;
+  const context: RequestContext = { uri, generation: gen };
+  if (options.forceRefresh) {
+    existing?.controller.abort();
+    invalidateTrackCaches(uri);
+  }
 
   let promise: Promise<[object | string, number] | null>;
-  promise = fetchLyricsInner(uri, gen, controller.signal)
+  promise = fetchLyricsInner(uri, gen, controller.signal, options.forceRefresh === true, context)
     .catch((error): [object | string, number] | null => {
       // 已被新请求取代（切歌/重复请求）或已 abort：静默丢弃，绝不能把
       // 错误元组交给调用方的 .then(ApplyLyrics)——那会把新歌的正常歌词
       // 覆盖成"发生未知错误"。
-      if (gen !== lyricsGeneration || controller.signal.aborted) {
+      if (!isActiveRequest(gen, uri, controller.signal)) {
         return null;
       }
       // 顶层兜底：任何内部 throw（provider / ProcessLyrics / 解析等）都不能让
@@ -422,7 +501,13 @@ export default async function fetchLyrics(uri: string): Promise<[object | string
       });
       $currentlyFetching.set(false);
       HideLoaderContainer();
+      context.failure = classifyLyricsFailure(error);
       return ["unknown-error", 500];
+    })
+    .then((result) => {
+      if (!isActiveRequest(gen, uri, controller.signal)) return null;
+      if (result) resultContexts.set(result, context);
+      return result;
     })
     .finally(() => {
       // A second request for the same URI may have replaced this entry after the
@@ -443,11 +528,14 @@ function isStale(gen: number): boolean {
 async function fetchLyricsInner(
   uri: string,
   gen: number,
-  signal: AbortSignal
+  signal: AbortSignal,
+  forceRefresh: boolean,
+  context: RequestContext
 ): Promise<[object | string, number] | null> {
   lyricsLogger.debug("Fetch requested", uri);
   const LyricsContent =
     PageContainer?.querySelector(".LyricsContainer .LyricsContent") ?? undefined;
+  const keepNotice = forceRefresh && Boolean(LyricsContent?.querySelector(".LyricsNotice"));
   if (LyricsContent?.classList.contains("offline")) {
     LyricsContent.classList.remove("offline");
   }
@@ -498,11 +586,21 @@ async function fetchLyricsInner(
   });
 
   $currentlyFetching.set(true);
-  if (LyricsContent) LyricsContent.classList.add("HiddenTransitioned");
+  if (LyricsContent && !keepNotice) LyricsContent.classList.add("HiddenTransitioned");
+
+  if (forceRefresh) {
+    try {
+      await mutateLyricsCache(trackId, () => LyricsStore.RemoveItem(trackId));
+    } catch (error) {
+      // Storage is optional: a failed deletion must not prevent a real network retry.
+      lyricsCacheLogger.warn("清除歌曲缓存失败，仍重新请求歌词", error);
+    }
+    if (!isActiveRequest(gen, uri, signal)) return null;
+  }
 
   // ===== 内存缓存（$currentLyricsData）：命中且身份一致才采用 =====
   const savedLyricsData = $currentLyricsData.get();
-  if (savedLyricsData && !isDev) {
+  if (!forceRefresh && savedLyricsData && !isDev) {
     try {
       if (savedLyricsData.startsWith("NO_LYRICS:")) {
         const savedUri = savedLyricsData.slice("NO_LYRICS:".length);
@@ -544,17 +642,17 @@ async function fetchLyricsInner(
     }
   }
 
-  if (inflightLyricsPrefetches.has(uri)) {
+  if (!forceRefresh && inflightLyricsPrefetches.has(uri)) {
     ShowLoaderContainer();
     await waitForLyricsPrefetch(uri, signal);
     if (!isActiveRequest(gen, uri, signal)) return null;
   }
 
   // ===== 持久缓存（LyricsStore）：命中且身份一致才采用 =====
-  if (LyricsStore) {
+  if (!forceRefresh && LyricsStore) {
     try {
       const res = await LyricsStore.GetItem(trackId);
-      if (isStale(gen)) {
+      if (!isActiveRequest(gen, uri, signal)) {
         return null;
       }
       if (res) {
@@ -628,15 +726,16 @@ async function fetchLyricsInner(
       uri,
       track: label,
     });
+    context.failure = "offline";
     return ["offline", 400];
   }
 
-  ShowLoaderContainer();
+  if (!keepNotice) ShowLoaderContainer();
 
   // ===== 主源：LYRIVA API（完全替换内置多源搜索 → Matcher → 取词链） =====
   const requestStartedAt = performance.now();
   let result: LyrivaResult;
-  const reusedPrefetchMiss = recentLyrivaPrefetchMisses.has(uri);
+  const reusedPrefetchMiss = !forceRefresh && recentLyrivaPrefetchMisses.has(uri);
   if (reusedPrefetchMiss) {
     result = { kind: "not-found" };
     lyricsLogger.debug("Reusing recent LYRIVA prefetch miss", uri);
@@ -654,7 +753,7 @@ async function fetchLyricsInner(
     kind: result.kind,
     uri,
   });
-  if (isStale(gen)) {
+  if (!isActiveRequest(gen, uri, signal)) {
     return null;
   }
 
@@ -662,7 +761,7 @@ async function fetchLyricsInner(
   let fallback: GeniusFallbackResult | null = null;
   if (result.kind !== "ok") {
     fallback = await tryGeniusFallback(target, signal);
-    if (isStale(gen)) {
+    if (!isActiveRequest(gen, uri, signal)) {
       return null;
     }
     if (fallback.kind === "hit") {
@@ -705,11 +804,14 @@ async function fetchLyricsInner(
             targetArtists: target.artists,
           },
         };
-        await LyricsStore.SetItem(trackId, notFoundEntry);
+        await mutateLyricsCache(trackId, async () => {
+          if (isActiveRequest(gen, uri, signal)) await LyricsStore.SetItem(trackId, notFoundEntry);
+        });
       } catch (error) {
         lyricsCacheLogger.error("Error saving NO_LYRICS to cache", error);
       }
     }
+    if (!isActiveRequest(gen, uri, signal)) return null;
     HideLoaderContainer();
     $currentlyFetching.set(false);
     recordCurrentDiagnostic({
@@ -743,6 +845,8 @@ async function fetchLyricsInner(
     uri,
     track: label,
   });
+  context.failure =
+    result.kind === "unavailable" ? classifyLyricsFailure(result.reason) : "service";
   return ["unknown-error", 500];
 }
 

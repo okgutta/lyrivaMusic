@@ -39,6 +39,7 @@ class LyricsVirtualizer {
   private _allElements: HTMLElement[] = [];
   private _elementIndices = new WeakMap<HTMLElement, number>();
   private _layoutRevision = 0;
+  private _lineSpacing = 1;
   // One positioning wrapper per line element. The wrapper gets position:absolute +
   // translateY from the virtualizer; the .line lives inside it so a CSS `scale` on
   // .line acts around its own center instead of composing with translateY through
@@ -134,7 +135,11 @@ class LyricsVirtualizer {
     // too so there is no double-gap between the surrounding lines.
     const el = this._allElements[index];
     if (el?.classList.contains("musical-line") && !el.classList.contains("Active")) return 0;
-    return (this._isNextBgLine(index) ? GAP_LINE_TO_BG : GAP_NORMAL) * (this._containerWidth / 100);
+    return (
+      (this._isNextBgLine(index) ? GAP_LINE_TO_BG : GAP_NORMAL) *
+      (this._containerWidth / 100) *
+      this._lineSpacing
+    );
   }
 
   private _estimateSize = (index: number): number => {
@@ -192,6 +197,32 @@ class LyricsVirtualizer {
 
   public remeasure(): void {
     this._remeasureVisible();
+  }
+
+  public refreshReadingLayout(lineSpacing: number): void {
+    const v = this._virtualizer;
+    const scrollEl = this._scrollEl;
+    let anchor: { index: number; offset: number } | undefined;
+    if (v && scrollEl?.clientHeight && this._virtualContainer) {
+      const containerOffset =
+        this._virtualContainer.getBoundingClientRect().top -
+        scrollEl.getBoundingClientRect().top +
+        scrollEl.scrollTop;
+      const visibleStart = scrollEl.scrollTop - containerOffset;
+      const item = v.getVirtualItems().find((item) => item.size > 0 && item.end > visibleStart);
+      if (item) anchor = { index: item.index, offset: item.start - visibleStart };
+    }
+    this._lineSpacing = Number.isFinite(lineSpacing)
+      ? Math.max(0.75, Math.min(1.6, lineSpacing))
+      : 1;
+    this._layoutRevision++;
+    // A font/translation change also affects rows outside the mounted window.
+    // Invalidate their old heights before they become scroll targets again.
+    v?.measure();
+    this._remeasureVisible();
+    // Keep the same lyric at the same screen position, including static lyrics
+    // and users reading ahead. The existing convergence path handles new heights.
+    if (anchor) this.scrollToIndex(anchor.index, "start", true, -anchor.offset);
   }
 
   // Push the live viewport size into TanStack's cached scrollRect when it has gone
@@ -1080,4 +1111,8 @@ export function setOnNewElementMounted(cb: (() => void) | null): void {
 
 export function triggerRemeasureLV(): void {
   lyricsVirtualizer.remeasure();
+}
+
+export function refreshReadingLayoutLV(lineSpacing: number): void {
+  lyricsVirtualizer.refreshReadingLayout(lineSpacing);
 }

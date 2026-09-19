@@ -58,8 +58,6 @@ import { GetNPVCardElement, initNPVLyrics } from "./components/Utils/NPVLyrics.t
 import ReactDOM from "react-dom/client";
 import { runThemeMatcher } from "./utils/themeMatcher.ts";
 import "./utils/settings.ts";
-// 副作用导入：注册逐词对照（Learning Mode）的注入与订阅
-import "./utils/Lyrics/Applyer/Utils/LearningRow.ts";
 import SLToaster from "./components/ReactComponents/SLToaster.tsx";
 import { openSettingsPanel } from "./utils/settings.ts";
 import Logger from "./utils/Logger.ts";

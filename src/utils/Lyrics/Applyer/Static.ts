@@ -1,5 +1,7 @@
 import { $lyricsContainerExists } from "../../../utils/stores.ts";
 import { PageContainer } from "../../../components/Pages/PageView.ts";
+import { $lyricsTranslationPosition } from "../readingPreferences.ts";
+import { positionLineTranslation } from "./Utils/TranslationPosition.ts";
 import { type StyleProperties, applyStyles, removeAllStyles } from "../../CSS/Styles.ts";
 import {
   MountScrollSimplebar,
@@ -74,12 +76,12 @@ export function ApplyStaticLyrics(data: StaticLyricsData, UseRomanized: boolean 
     lineElem.classList.add("line");
     lineElem.classList.add("static");
 
-    // 翻译行：原文下方追加次级译文
+    // Static lyrics use the same translation placement as synced lyrics.
     if (line.Translation) {
       const trans = document.createElement("div");
       trans.className = "line-translation";
       trans.textContent = line.Translation;
-      lineElem.appendChild(trans);
+      positionLineTranslation(lineElem, trans, $lyricsTranslationPosition.get());
     }
 
     // Add the line element to the lyrics object

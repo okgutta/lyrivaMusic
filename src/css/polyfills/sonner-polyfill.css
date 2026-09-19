@@ -1,90 +1,87 @@
-/*
- * Sonner toast — iOS light glass.
- * Translucent white material, dark text, no per-status surface color.
- * Status icon stays subtly tinted but the toast itself is neutral.
- */
-
-[data-sonner-toaster][data-theme="dark"] {
-  --normal-bg: var(--material-regular-bg);
+/* Plugin notifications share the settings panel's quiet, dark material.
+   Scope every override to our toaster so host and other extensions keep their styling. */
+.sl-toaster[data-sonner-toaster][data-sonner-theme="dark"] {
+  --normal-bg: rgba(22, 22, 22, 0.35);
+  --normal-bg-hover: rgba(32, 32, 32, 0.45);
   --normal-border: var(--on-material-hairline);
+  --normal-border-hover: var(--on-material-hairline-strong);
   --normal-text: var(--on-material-text-primary);
-
-  --success-bg: var(--material-regular-bg);
-  --success-border: var(--on-material-hairline);
-  --success-text: var(--on-material-text-primary);
-
-  --error-bg: var(--material-regular-bg);
-  --error-border: var(--on-material-hairline);
-  --error-text: var(--on-material-text-primary);
-
-  --warning-bg: var(--material-regular-bg);
-  --warning-border: var(--on-material-hairline);
-  --warning-text: var(--on-material-text-primary);
-
-  --info-bg: var(--material-regular-bg);
-  --info-border: var(--on-material-hairline);
-  --info-text: var(--on-material-text-primary);
-
   --border-radius: var(--radius-md);
-  --shadow:
-    var(--liquid-cast-soft), inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    inset 0 0 0 1px var(--on-material-hairline);
-  --description-color: var(--on-material-text-tertiary);
-  font-size: 0.85rem;
+  font-family: var(--encore-body-font-stack, var(--fallback-fonts, system-ui));
+  font-optical-sizing: auto;
+  color-scheme: dark;
 }
 
-[data-sonner-toast] {
-  border-radius: var(--radius-md) !important;
-  box-shadow:
-    var(--liquid-cast-soft),
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    inset 0 0 0 1px var(--on-material-hairline),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.22) !important;
-  background: var(--material-regular-bg) !important;
-  -webkit-backdrop-filter: var(--material-regular-blur) !important;
-  backdrop-filter: var(--material-regular-blur) !important;
-  color: var(--on-material-text-primary) !important;
-  font-size: 0.85rem !important;
-  font-family: inherit !important;
+.sl-toaster[data-sonner-toaster][data-x-position="center"] {
+  width: min(356px, calc(100vw - 32px));
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  transform: none;
 }
 
-/* Status icons — neutral primary on light material */
-[data-sonner-toast][data-type="success"] [data-icon],
-[data-sonner-toast][data-type="error"] [data-icon],
-[data-sonner-toast][data-type="warning"] [data-icon],
-[data-sonner-toast][data-type="info"] [data-icon] {
-  color: var(--on-material-text-primary) !important;
+.sl-toaster[data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
+  width: max-content;
+  max-width: 100%;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  padding: 10px 14px;
+  background: var(--normal-bg);
+  border: 1px solid var(--normal-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  backdrop-filter: blur(20px) saturate(1.3);
+  color: var(--normal-text);
+  font-family: inherit;
+  font-size: var(--text-body-size);
 }
 
-[data-sonner-toast] [data-title] {
-  font-size: var(--text-headline-size) !important;
-  font-weight: var(--w-medium) !important;
-  color: var(--on-material-text-primary) !important;
+.sl-toaster[data-sonner-toaster] [data-sonner-toast] [data-content] {
+  min-width: 0;
 }
 
-[data-sonner-toast] [data-description] {
-  font-size: var(--text-caption-size) !important;
-  font-weight: var(--w-regular) !important;
-  color: var(--on-material-text-tertiary) !important;
+.sl-toaster[data-sonner-toaster] [data-sonner-toast] [data-title] {
+  color: var(--normal-text);
+  font-size: var(--text-body-size);
+  font-weight: var(--w-medium);
+  line-height: 1.5;
 }
 
-[data-sonner-toast] [data-close-button] {
-  background: var(--on-material-tint-bg) !important;
-  border: 1px solid var(--on-material-hairline) !important;
-  color: var(--on-material-text-secondary) !important;
-  border-radius: 6px !important;
-  transition:
-    background 0.15s,
-    color 0.15s !important;
+.sl-toaster[data-sonner-toaster] [data-sonner-toast] [data-description] {
+  color: rgba(255, 255, 255, 0.76);
+  font-size: var(--text-caption-size);
+  font-weight: var(--w-regular);
+  line-height: 1.45;
 }
 
-[data-sonner-toast] [data-close-button]:hover {
-  background: var(--on-material-tint-bg-hover) !important;
-  color: var(--on-material-text-primary) !important;
+.sl-toaster[data-sonner-toaster] [data-sonner-toast]:focus-visible,
+.sl-toaster[data-sonner-toaster] [data-button]:focus-visible,
+.sl-toaster[data-sonner-toaster] [data-close-button]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 
-[data-sonner-toast] [data-button] {
-  border-radius: 7px !important;
-  font-size: var(--text-caption-size) !important;
-  font-weight: var(--w-semibold) !important;
+@media (prefers-reduced-motion: reduce) {
+  .sl-toaster[data-sonner-toaster] {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .sl-toaster[data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
+    background: #242424;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .sl-toaster[data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
+    background: #202020;
+    border-color: rgba(255, 255, 255, 0.4);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }

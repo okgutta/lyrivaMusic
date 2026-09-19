@@ -679,47 +679,6 @@
   .Header
   .MediaBox
   .MediaContent
-  .ViewControls
-  .ViewControl {
-  background: var(--material-regular-bg) !important;
-  border: 0 !important;
-  -webkit-backdrop-filter: var(--material-regular-blur) !important;
-  backdrop-filter: var(--material-regular-blur) !important;
-  box-shadow:
-    0 10px 24px -8px rgba(8, 10, 18, 0.42),
-    inset 0 1px 0 rgba(255, 255, 255, 0.36),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.16),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.18) !important;
-  color: var(--color-text-primary) !important;
-}
-
-/* Fullscreen :hover — re-apply the luminous halo (needs !important to
-   beat the base rule above that locks box-shadow with !important). */
-#SpicyLyricsPage.Fullscreen
-  .ContentBox
-  .NowBar
-  .CenteredView
-  .Header
-  .MediaBox
-  .MediaContent
-  .ViewControls
-  .ViewControl:hover {
-  background: rgba(255, 255, 255, 0.12) !important;
-  box-shadow:
-    0 14px 32px -8px rgba(8, 10, 18, 0.5),
-    0 0 22px -4px rgba(255, 255, 255, 0.24),
-    inset 0 1px 0 rgba(255, 255, 255, 0.48),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.22),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.24) !important;
-}
-
-#SpicyLyricsPage.Fullscreen
-  .ContentBox
-  .NowBar
-  .CenteredView
-  .Header
-  .MediaBox
-  .MediaContent
   .PlaybackControls
   .PlaybackControl.Pressed {
   transform: scale(var(--ShrinkScale));
@@ -1549,11 +1508,11 @@
 
 #SpicyLyricsPage.CompactMode.CompactifyEnabledCompactMode .LyricsContainer .LyricsContent,
 #SpicyLyricsPage.ForcedCompactMode.CompactifyEnabledCompactMode .LyricsContainer .LyricsContent {
-  --DefaultLyricsSize: clamp(3rem, calc(1cqw * 7), 4rem);
+  --DefaultLyricsSize: calc(clamp(3rem, calc(1cqw * 7), 4rem) * var(--sl-lyrics-font-scale, 1));
 }
 
 #SpicyLyricsPage.TippyMode .LyricsContainer .LyricsContent {
-  --DefaultLyricsSize: clamp(2.5rem, calc(1cqw * 7), 3.5rem);
+  --DefaultLyricsSize: calc(clamp(2.5rem, calc(1cqw * 7), 3.5rem) * var(--sl-lyrics-font-scale, 1));
 }
 
 #SpicyLyricsPage.Fullscreen.CompactMode.SpicyRenderer:has(.MediaBox:hover)

@@ -8,14 +8,20 @@ import { EmitApply, EmitNotApplyed } from "../Applyer/OnApply.ts";
 import { ApplyStaticLyrics, type StaticLyricsData } from "../Applyer/Static.ts";
 import { ApplyLineLyrics } from "../Applyer/Synced/Line.ts";
 import { ApplySyllableLyrics } from "../Applyer/Synced/Syllable.ts";
-import { ClearLyricsPageContainer } from "../fetchLyrics.ts";
+import fetchLyrics, {
+  ClearLyricsPageContainer,
+  getLyricsFailure,
+  isCurrentLyricsResult,
+} from "../fetchLyrics.ts";
+import { canRetryLyricsNotice, lyricsFailureMessage } from "../lyricsFailure.ts";
+import "../../../css/lyrics-notice.css";
 import { ClearLyricsContentArrays, isRomanized } from "../lyrics.ts";
 import {
   afterLyricsApply,
   prepareLyricsForDisplay,
   resetTranslationForTrack,
 } from "../Translate/index.ts";
-import { PageContainer } from "../../../components/Pages/PageView.ts";
+import PageView, { PageContainer } from "../../../components/Pages/PageView.ts";
 import { CleanUpIsByCommunity } from "../Applyer/Credits/ApplyIsByCommunity.tsx";
 import { IsCompactMode } from "../../../components/Utils/CompactMode.ts";
 import Fullscreen from "../../../components/Utils/Fullscreen.ts";
@@ -37,8 +43,9 @@ export default async function ApplyLyrics(
   lyricsContent: [object | string, number] | null
 ): Promise<void> {
   if (!PageContainer) return;
-  setBlurringLastLine(null);
   if (!lyricsContent) return;
+  if (!isCurrentLyricsResult(lyricsContent)) return;
+  setBlurringLastLine(null);
   const [descriptor] = lyricsContent;
   const currentUri = SpotifyPlayer.GetUri();
   if (typeof descriptor !== "string") {
@@ -65,6 +72,7 @@ export default async function ApplyLyrics(
   CleanUpIsByCommunity();
 
   let noticeContent: string | null = null;
+  let noticeDetail: string | null = null;
 
   switch (descriptor) {
     case "lyrics-not-found": {
@@ -80,15 +88,18 @@ export default async function ApplyLyrics(
       break;
     }
     case "unknown-error": {
-      noticeContent = `发生未知错误`;
+      noticeContent = "暂时无法加载歌词";
+      noticeDetail = lyricsFailureMessage(getLyricsFailure(lyricsContent) ?? "unknown");
       break;
     }
     case "offline": {
-      noticeContent = `请联网后再享受歌词体验！`;
+      noticeContent = "网络已断开";
+      noticeDetail = lyricsFailureMessage("offline");
       break;
     }
     case "status-not-200": {
-      noticeContent = `服务器出错`;
+      noticeContent = "歌词服务暂时不可用";
+      noticeDetail = lyricsFailureMessage("service");
       break;
     }
     case "video-track": {
@@ -130,22 +141,79 @@ export default async function ApplyLyrics(
 
     const currentNoticeElement = document.createElement("div");
     currentNoticeElement.classList.add("LyricsNotice");
+    currentNoticeElement.setAttribute("role", "status");
+    currentNoticeElement.setAttribute("aria-live", "polite");
     lyricsContainer.appendChild(currentNoticeElement);
 
-    if (
+    const hideNotice =
       !IsCompactMode() &&
       (Fullscreen.IsOpen || Fullscreen.CinemaViewOpen) &&
-      (descriptor === "lyrics-not-found" || descriptor === "local-track")
-    ) {
-      PageContainer?.querySelector<HTMLElement>(".ContentBox .LyricsContainer")?.classList.add(
-        "Hidden"
-      );
-      PageContainer?.querySelector<HTMLElement>(".ContentBox")?.classList.add("LyricsHidden");
+      (descriptor === "lyrics-not-found" || descriptor === "local-track");
+    PageContainer.querySelector<HTMLElement>(".ContentBox .LyricsContainer")?.classList.toggle(
+      "Hidden",
+      hideNotice
+    );
+    PageContainer.querySelector<HTMLElement>(".ContentBox")?.classList.toggle(
+      "LyricsHidden",
+      hideNotice
+    );
+
+    const title = document.createElement("p");
+    title.className = "notice-descriptor";
+    title.textContent = noticeContent;
+    currentNoticeElement.appendChild(title);
+    const detail = document.createElement("p");
+    detail.className = "notice-detail";
+    if (noticeDetail) {
+      detail.textContent = noticeDetail;
+      currentNoticeElement.appendChild(detail);
     }
 
-    currentNoticeElement.innerHTML = `
-      <p class="notice-descriptor">${noticeContent.trim()}</p>
-    `;
+    if (
+      canRetryLyricsNotice(descriptor) &&
+      currentUri &&
+      /^spotify:track:[^:]+$/.test(currentUri)
+    ) {
+      const page = PageContainer;
+      const retry = document.createElement("button");
+      retry.type = "button";
+      retry.className = "lyrics-notice-retry";
+      const label = descriptor === "lyrics-not-found" ? "重新获取" : "重试";
+      retry.textContent = label;
+      const isCurrentNotice = () =>
+        PageView.IsOpened &&
+        PageContainer === page &&
+        currentNoticeElement.isConnected &&
+        SpotifyPlayer.GetUri() === currentUri;
+      retry.addEventListener("click", async () => {
+        if (retry.disabled || !isCurrentNotice()) return;
+        const restoreFocus = retry.ownerDocument.activeElement === retry;
+        retry.disabled = true;
+        retry.textContent = "正在重新获取…";
+        currentNoticeElement.setAttribute("aria-busy", "true");
+        try {
+          const result = await fetchLyrics(currentUri, { forceRefresh: true });
+          if (!result || !isCurrentNotice() || !isCurrentLyricsResult(result)) return;
+          await ApplyLyrics(result);
+          if (restoreFocus && typeof result[0] === "string" && PageContainer === page) {
+            page
+              .querySelector<HTMLButtonElement>(".lyrics-notice-retry")
+              ?.focus({ preventScroll: true });
+          }
+        } catch {
+          if (!isCurrentNotice()) return;
+          detail.textContent = lyricsFailureMessage("unknown");
+          if (!detail.isConnected) currentNoticeElement.insertBefore(detail, retry);
+        } finally {
+          if (isCurrentNotice()) {
+            retry.disabled = false;
+            retry.textContent = label;
+            currentNoticeElement.setAttribute("aria-busy", "false");
+          }
+        }
+      });
+      currentNoticeElement.appendChild(retry);
+    }
 
     EmitApply("None", null);
     return;

@@ -96,7 +96,9 @@
 }
 
 #SpicyLyricsPage.CompactMode:not(.Fullscreen) .ContentBox .LyricsContainer .LyricsContent {
-  --DefaultLyricsSize: clamp(1.85rem, calc(1cqw * 7), 3.5rem);
+  --DefaultLyricsSize: calc(
+    clamp(1.85rem, calc(1cqw * 7), 3.5rem) * var(--sl-lyrics-font-scale, 1)
+  );
 }
 
 #SpicyLyricsPage.CompactMode:not(.Fullscreen).ViewControlsPosition_Bottom .ContentBox {

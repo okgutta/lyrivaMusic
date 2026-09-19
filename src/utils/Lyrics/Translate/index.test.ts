@@ -8,7 +8,7 @@ import { resolve } from "node:path";
 const { build } = createRequire(import.meta.url)("esbuild") as typeof Esbuild;
 
 // Exercise the real orchestrator, provider requests, stores and both caches.
-// Only the Spotify host's playback metadata and DOM renderer are replaced.
+// Only the Spotify host's playback metadata, DOM renderer and notification surface are replaced.
 const bundle = await build({
   stdin: {
     contents: `
@@ -28,19 +28,25 @@ const bundle = await build({
     {
       name: "spotify-host-fixture",
       setup(builder) {
+        builder.onResolve({ filter: /\/notify\.ts$/ }, () => ({
+          path: "notifications",
+          namespace: "spotify-fixture",
+        }));
         builder.onResolve({ filter: /(?:SpotifyPlayer|Global\/Applyer)\.ts$/ }, (args) => ({
           path: args.path.includes("SpotifyPlayer") ? "player" : "renderer",
           namespace: "spotify-fixture",
         }));
         builder.onLoad({ filter: /.*/, namespace: "spotify-fixture" }, (args) => ({
           contents:
-            args.path === "player"
-              ? `export const SpotifyPlayer = {
+            args.path === "notifications"
+              ? "export function notify() {}"
+              : args.path === "player"
+                ? `export const SpotifyPlayer = {
               GetUri: () => globalThis.__translationTestUri,
               GetArtists: () => [],
               GetName: () => "Fixture"
             };`
-              : "export default async function ApplyLyrics() {}",
+                : "export default async function ApplyLyrics() {}",
           loader: "js",
         }));
       },
@@ -55,7 +61,6 @@ const storage = new Map<string, string>();
     set: (key: string, value: string) => storage.set(key, value),
     remove: (key: string) => storage.delete(key),
   },
-  showNotification() {},
 };
 (globalThis as any).window = { _spicy_lyrics_metadata: undefined };
 const app = await import(

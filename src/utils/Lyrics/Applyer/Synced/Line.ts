@@ -1,5 +1,7 @@
 import { $lyricsContainerExists, $simpleLyricsMode } from "../../../../utils/stores.ts";
 import { PageContainer } from "../../../../components/Pages/PageView.ts";
+import { $lyricsTranslationPosition } from "../../readingPreferences.ts";
+import { positionLineTranslation } from "../Utils/TranslationPosition.ts";
 import { applyStyles, removeAllStyles } from "../../../CSS/Styles.ts";
 import {
   MountScrollSimplebar,
@@ -173,12 +175,12 @@ export function ApplyLineLyrics(data: LyricsData, UseRomanized: boolean = false)
     lineElem.textContent = lineText;
     lineElem.classList.add("line");
 
-    // 翻译行（网易云 tlyric）：原文下方追加次级译文
+    // The same reading order applies to line and word timing.
     if (line.Translation) {
       const trans = document.createElement("div");
       trans.className = "line-translation";
       trans.textContent = line.Translation;
-      lineElem.appendChild(trans);
+      positionLineTranslation(lineElem, trans, $lyricsTranslationPosition.get());
     }
 
     if (isRtl(line.Text) && !lineElem.classList.contains("rtl")) {

@@ -17,6 +17,7 @@ import {
 } from "../../../utils/stores.ts";
 import { fetchModelsForProvider } from "../../../utils/Lyrics/Translate/providers.ts";
 import { normalizeApiBaseUrl } from "../../../utils/Lyrics/Translate/url.ts";
+import { notify } from "../../../utils/notify.ts";
 import { Row, Select, Section, Input } from "./components.tsx";
 
 /** 二级页外壳：返回按钮 + 内容滚动 */
@@ -82,15 +83,6 @@ function DetailActionBar({
       <div className="sl-sp-inline-controls sl-sp-detail-actions">{children}</div>
     </>
   );
-}
-
-/** 保存/清除 Genius Token 的通用反馈 */
-function notify(message: string): void {
-  try {
-    Spicetify.showNotification(message);
-  } catch {
-    /* ignore */
-  }
 }
 
 export function DetailGeniusToken({ onBack }: { onBack: () => void }) {
@@ -478,7 +470,7 @@ export function DetailCustomConfig({ onBack }: { onBack: () => void }) {
             onClick={() => {
               const normalizedUrl = normalizeApiBaseUrl(draftUrl);
               if (!normalizedUrl) {
-                notify("API 地址必须使用 HTTPS（仅 localhost 可使用 HTTP）");
+                notify("API 地址必须使用 HTTPS（仅 localhost 可使用 HTTP）", true);
                 return;
               }
               $customApiBaseUrl.set(normalizedUrl);

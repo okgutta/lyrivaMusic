@@ -6,19 +6,11 @@ import {
 import { clearTranslationCache } from "../../../utils/Lyrics/Translate/cache.ts";
 import { clearAllTrackCache } from "../../../utils/Lyrics/Translate/trackCache.ts";
 import { openTranslationCacheViewer } from "../../../utils/Lyrics/Translate/cacheViewer.ts";
+import { notify } from "../../../utils/notify.ts";
 import { matches, NavigationRow, Row, Section } from "./components.tsx";
 
 /** 缓存：按作用范围分组（当前歌曲 / 全部歌曲 / 翻译缓存） */
 const SECTION_NAME = "cache";
-
-/** 破坏性清除必须有可见反馈——否则用户无法区分"清掉了"和"没生效" */
-function notify(message: string): void {
-  try {
-    Spicetify.showNotification(message);
-  } catch {
-    /* 通知失败不影响清除本身 */
-  }
-}
 
 interface Props {
   query: string;
@@ -84,8 +76,7 @@ export default function CacheSection({ query, sectionFilter }: Props) {
                 type="button"
                 className="sl-sp-btn"
                 onClick={() => {
-                  void RemoveCurrentLyrics_AllCaches(true);
-                  notify("已清除当前歌曲缓存");
+                  void RemoveCurrentLyrics_AllCaches();
                 }}
               >
                 清除
@@ -98,8 +89,7 @@ export default function CacheSection({ query, sectionFilter }: Props) {
               <ConfirmButton
                 label="清除全部"
                 onConfirm={async () => {
-                  await RemoveLyricsCache(true);
-                  notify("已清除全部歌词缓存");
+                  await RemoveLyricsCache();
                 }}
               />
             </Row>

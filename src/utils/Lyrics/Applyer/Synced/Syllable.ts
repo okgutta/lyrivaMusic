@@ -4,6 +4,8 @@ import {
   $simpleLyricsMode,
 } from "../../../../utils/stores.ts";
 import { PageContainer } from "../../../../components/Pages/PageView.ts";
+import { $lyricsTranslationPosition } from "../../readingPreferences.ts";
+import { positionLineTranslation } from "../Utils/TranslationPosition.ts";
 import { applyStyles, removeAllStyles } from "../../../CSS/Styles.ts";
 import {
   MountScrollSimplebar,
@@ -332,13 +334,12 @@ export function ApplySyllableLyrics(data: LyricsData, UseRomanized: boolean = fa
       }
     });
 
-    // Keep the reading order consistent with line/static lyrics: all lead
-    // words and letter groups first, then this lead line's translation.
+    // Translation placement preserves the original timed word elements.
     if (line.Translation) {
       const trans = document.createElement("div");
       trans.className = "line-translation";
       trans.textContent = line.Translation;
-      lineElem.appendChild(trans);
+      positionLineTranslation(lineElem, trans, $lyricsTranslationPosition.get());
     }
 
     if (line.Background) {

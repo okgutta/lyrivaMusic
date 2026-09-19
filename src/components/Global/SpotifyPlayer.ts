@@ -1,5 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
 import GetProgress, { _DEPRECATED___GetProgress } from "../../utils/Gets/GetProgress.ts";
+import { createViewControlTooltip } from "../Utils/ViewControlTooltip.ts";
 
 const GetContentType = (): string => {
   if (Spicetify?.Player?.data?.item?.type) {
@@ -143,10 +144,9 @@ export const SpotifyPlayer = {
         this.onClick = onClick;
         this.disabled = disabled;
         this.active = active;
-        this.tippy = (Spicetify as any).Tippy?.(this.element, {
-          content: label,
-          ...(Spicetify as any).TippyProps,
-        });
+        this.tippy = (Spicetify as any).Tippy
+          ? createViewControlTooltip(this.element, label)
+          : undefined;
         this.label = label;
         if (registerOnCreate) this.register();
       }

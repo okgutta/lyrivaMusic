@@ -1,10 +1,10 @@
 /**
- * 翻译缓存查看器 —— 移植自 Spicy Lyric Translator（SLT）的缓存 UI 设计。
+ * 翻译缓存查看器。
  * 两个 Modal：缓存列表（统计 + 歌曲卡片 + Play/查看/删除）与逐曲查看（两列 contenteditable 编辑）。
- * 个人学习/私有使用（SLT Source-Available License 明确允许本地私有修改）。
  */
 import { PopupModal } from "../../../components/Modal.ts";
 import { openSettingsPanel } from "../../settings.ts";
+import { notify } from "../../notify.ts";
 import { SpotifyPlayer } from "../../../components/Global/SpotifyPlayer.ts";
 import { clearTranslationCache, removeCachedTranslation, setCachedTranslation } from "./cache.ts";
 import {
@@ -74,7 +74,7 @@ async function playTrack(uri: string): Promise<boolean> {
   }
 }
 
-// ─── 共享样式（SLT 移植） ─────────────────────────────────────────────────────
+// ─── 共享样式 ────────────────────────────────────────────────────────────────
 
 const VIEWER_STYLE = `
     .slt-cache-viewer {
@@ -426,7 +426,7 @@ const LYRICS_VIEWER_STYLE = `
     }
 `;
 
-// ─── 缓存列表 Modal（SLT createCacheViewerUI 移植） ─────────────────────────
+// ─── 缓存列表 Modal ──────────────────────────────────────────────────────────
 
 function createCacheViewerUI(): HTMLElement {
   const stats = getTrackCacheStats();
@@ -538,11 +538,7 @@ function createCacheViewerUI(): HTMLElement {
       button.textContent = "打开中…";
       try {
         const played = await playTrack(uri);
-        try {
-          Spicetify.showNotification(played ? "正在播放缓存的歌曲" : "无法直接播放该歌曲", !played);
-        } catch {
-          /* ignore */
-        }
+        notify(played ? "正在播放缓存的歌曲" : "无法直接播放该歌曲", !played);
       } finally {
         button.disabled = false;
         button.textContent = previousText || "播放";
@@ -588,17 +584,13 @@ function createCacheViewerUI(): HTMLElement {
       list.innerHTML =
         '<div class="slt-empty-cache">还没有翻译缓存 —— 播放并翻译过的歌曲会出现在这里</div>';
     container.querySelector(".slt-cache-actions")?.remove();
-    try {
-      Spicetify.showNotification("已清空全部翻译缓存");
-    } catch {
-      /* ignore */
-    }
+    notify("已清空全部翻译缓存");
   });
 
   return container;
 }
 
-// ─── 逐曲查看 Modal（SLT openCachedLyricsViewer 移植） ───────────────────────
+// ─── 逐曲查看 Modal ──────────────────────────────────────────────────────────
 
 function renderInfoCell(label: string, value: string, title?: string): string {
   return `<div class="slt-lyrics-info-cell"${title ? ` title="${escapeHtml(title)}"` : ""}>
@@ -610,11 +602,7 @@ function renderInfoCell(label: string, value: string, title?: string): string {
 function openCachedLyricsViewer(trackUri: string, targetLang: string): void {
   const trackCache = getTrackCache(trackUri, targetLang);
   if (!trackCache) {
-    try {
-      Spicetify.showNotification("无法加载该歌曲的翻译缓存", true);
-    } catch {
-      /* ignore */
-    }
+    notify("无法加载该歌曲的翻译缓存", true);
     return;
   }
   const translatedLines = trackCache.lines || [];

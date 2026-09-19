@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useId } from "react";
+import React, { createContext, useContext, useId, useRef, useState } from "react";
 
 export function matches(query: string, label: string, description?: string): boolean {
   if (!query.trim()) return true;
@@ -65,14 +65,16 @@ export function Section({
   title,
   description,
   children,
+  className,
 }: {
   title?: string;
   /** 分组标题（Apple 分组列表的小标题） */
   description?: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="sl-sp-section">
+    <section className={`sl-sp-section${className ? ` ${className}` : ""}`}>
       {title && <h3 className="sl-sp-section-title">{title}</h3>}
       <div className="sl-sp-group">{children}</div>
       {description && <p className="sl-sp-section-desc">{description}</p>}
@@ -311,6 +313,126 @@ export function Input({
   );
 }
 
+/** Compact numeric control. Commit typed values on blur; keep edits reversible with Escape. */
+export function NumberStepper({
+  value,
+  min,
+  max,
+  step = 1,
+  defaultValue,
+  unit,
+  onChange,
+  disabled,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  defaultValue: number;
+  unit?: string;
+  onChange: (value: number) => void;
+  disabled?: boolean;
+}) {
+  const labelId = useRowLabelId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [draft, setDraft] = useState<string | null>(null);
+  const normalize = (next: number) =>
+    Math.min(max, Math.max(min, min + Math.round((next - min) / step) * step));
+  const commit = (text: string) => {
+    const parsed = text.trim() ? Number(text) : Number.NaN;
+    if (Number.isFinite(parsed)) onChange(normalize(parsed));
+    setDraft(null);
+  };
+  const adjust = (direction: number) => {
+    onChange(normalize(value + direction * step));
+    setDraft(null);
+  };
+
+  return (
+    <div className="sl-sp-stepper">
+      {value !== defaultValue && (
+        <button
+          type="button"
+          className="sl-sp-stepper-reset"
+          disabled={disabled}
+          aria-describedby={labelId}
+          title={`恢复默认值 ${defaultValue}${unit ?? ""}`}
+          onClick={() => {
+            setDraft(null);
+            onChange(defaultValue);
+            inputRef.current?.focus();
+          }}
+        >
+          重置
+        </button>
+      )}
+      <div className="sl-sp-stepper-field">
+        <button
+          type="button"
+          className="sl-sp-stepper-button"
+          aria-label="减小"
+          aria-describedby={labelId}
+          disabled={disabled || value <= min}
+          onClick={() => adjust(-1)}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M2 6h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </button>
+        <div className="sl-sp-stepper-value">
+          <input
+            ref={inputRef}
+            type="number"
+            inputMode="numeric"
+            min={min}
+            max={max}
+            step={step}
+            value={draft ?? value}
+            disabled={disabled}
+            aria-labelledby={labelId}
+            aria-label={labelId ? undefined : "数值"}
+            aria-valuetext={`${draft || value}${unit ?? ""}`}
+            onFocus={(event) => event.currentTarget.select()}
+            onChange={(event) => setDraft(event.currentTarget.value)}
+            onBlur={(event) => commit(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                event.currentTarget.blur();
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                event.currentTarget.value = String(value);
+                setDraft(null);
+                event.currentTarget.blur();
+              } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                event.preventDefault();
+                const parsed = Number(event.currentTarget.value);
+                const base = event.currentTarget.value && Number.isFinite(parsed) ? parsed : value;
+                onChange(normalize(base + (event.key === "ArrowUp" ? step : -step)));
+                setDraft(null);
+              }
+            }}
+          />
+          {unit && <span aria-hidden="true">{unit}</span>}
+        </div>
+        <button
+          type="button"
+          className="sl-sp-stepper-button"
+          aria-label="增大"
+          aria-describedby={labelId}
+          disabled={disabled || value >= max}
+          onClick={() => adjust(1)}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M2 6h8M6 2v8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Apple 双极滑块：以中性点为中心的 range 控件，负轴在左、正轴在右，
  * 填充从中心向拇指方向生长；偏离默认值时显示内联「重置」。
@@ -351,6 +473,7 @@ export function Slider({
   const valueLabel = `${sign}${clamped}${unit ? ` ${unit}` : ""}`;
   const changed = defaultValue !== undefined && clamped !== defaultValue;
   const labelId = useRowLabelId();
+  const inputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className={`sl-sp-slider${disabled ? " sl-sp-slider--disabled" : ""}`}>
@@ -365,6 +488,7 @@ export function Slider({
         />
         {isBipolar && <span className="sl-sp-slider-center" style={{ left: posFor(zeroFrac) }} />}
         <input
+          ref={inputRef}
           type="range"
           className="sl-sp-slider-input"
           min={min}
@@ -383,7 +507,13 @@ export function Slider({
           <button
             type="button"
             className="sl-sp-slider-reset"
-            onClick={() => onChange(defaultValue!)}
+            disabled={disabled}
+            title={`恢复默认值 ${defaultValue}${unit ?? ""}`}
+            aria-describedby={labelId}
+            onClick={() => {
+              onChange(defaultValue!);
+              inputRef.current?.focus();
+            }}
           >
             重置
           </button>

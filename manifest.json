@@ -1,0 +1,14 @@
+{
+  "name": "lyrivaMusic",
+  "description": "为 Spotify 提供逐字同步、翻译和沉浸式歌词显示，支持调整歌词字号、行距及译文位置。",
+  "main": "https://github.com/okgutta/lyrivaMusic/releases/latest/download/lyrivamusic.js",
+  "preview": "docs/marketplace.png",
+  "readme": "README.md",
+  "authors": [
+    {
+      "name": "okgutta",
+      "url": "https://github.com/okgutta"
+    }
+  ],
+  "tags": ["lyrics", "synced-lyrics", "translation", "chinese"]
+}

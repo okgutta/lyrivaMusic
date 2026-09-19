@@ -8,6 +8,7 @@ import type { LyricsObject as Model } from "../../lyrics.ts";
 import type { ApplySyllableLyrics } from "./Syllable.ts";
 import type { ApplyLineLyrics } from "./Line.ts";
 import type { ApplyStaticLyrics } from "../Static.ts";
+import type { positionLineTranslation } from "../Utils/TranslationPosition.ts";
 
 const { build } = createRequire(import.meta.url)("esbuild") as typeof Esbuild;
 
@@ -73,6 +74,12 @@ class FixtureElement {
   get lastElementChild(): FixtureElement | null {
     return this.children.at(-1) ?? null;
   }
+  get firstChild(): FixtureElement | FixtureText | null {
+    return this.childNodes[0] ?? null;
+  }
+  get lastChild(): FixtureElement | FixtureText | null {
+    return this.childNodes.at(-1) ?? null;
+  }
   get textContent(): string {
     return this.childNodes.map((child) => child.textContent).join("");
   }
@@ -92,6 +99,20 @@ class FixtureElement {
     if (previous) previous.childNodes.splice(previous.childNodes.indexOf(child), 1);
     child.parentElement = this;
     this.childNodes.push(child);
+    return child;
+  }
+  insertBefore<T extends FixtureElement | FixtureText>(
+    child: T,
+    before: FixtureElement | FixtureText | null
+  ): T {
+    if (child === before) return child;
+    if (!before) return this.appendChild(child);
+    const previous = child.parentElement;
+    if (previous) previous.childNodes.splice(previous.childNodes.indexOf(child), 1);
+    const index = this.childNodes.indexOf(before);
+    assert.ok(index >= 0, "Reference child belongs to parent");
+    child.parentElement = this;
+    this.childNodes.splice(index, 0, child);
     return child;
   }
   setAttribute(name: string, value: string): void {
@@ -116,6 +137,7 @@ class FixtureElement {
 
 const mountRoot = new FixtureElement("DIV");
 const host = {
+  translationPosition: "below" as "below" | "above",
   PageContainer: { querySelector: () => mountRoot },
   createContainer() {
     const Container = new FixtureElement("DIV");
@@ -134,6 +156,7 @@ const bundle = await build({
       export * from "./src/utils/Lyrics/Applyer/Synced/Line.ts";
       export * from "./src/utils/Lyrics/Applyer/Static.ts";
       export * from "./src/utils/Lyrics/lyrics.ts";
+      export * from "./src/utils/Lyrics/Applyer/Utils/TranslationPosition.ts";
     `,
     resolveDir: resolve("."),
   },
@@ -149,12 +172,13 @@ const bundle = await build({
         builder.onResolve(
           {
             filter:
-              /\/(?:stores|PageView|Styles|ScrollSimplebar|lyrics|CreateLyricsContainer|LyricsVirtualizer|ApplyIsByCommunity|ApplyLyricsCredits|ApplyProvider|OnApply)\.tsx?$/,
+              /\/(?:stores|readingPreferences|PageView|Styles|ScrollSimplebar|lyrics|CreateLyricsContainer|LyricsVirtualizer|ApplyIsByCommunity|ApplyLyricsCredits|ApplyProvider|OnApply)\.tsx?$/,
           },
           (args) => ({ path: args.path.split("/").pop()!, namespace: "renderer-fixture" })
         );
         builder.onLoad({ filter: /.*/, namespace: "renderer-fixture" }, (args) => {
           const sources: Record<string, string> = {
+            "readingPreferences.ts": `export const $lyricsTranslationPosition = { get: () => host.translationPosition };`,
             "stores.ts": `
               export const $lyricsContainerExists = { get: () => true };
               export const $minimalLyricsMode = { get: () => false };
@@ -209,6 +233,7 @@ const bundle = await build({
 });
 
 interface RendererApp {
+  positionLineTranslation: typeof positionLineTranslation;
   ApplySyllableLyrics: typeof ApplySyllableLyrics;
   ApplyLineLyrics: typeof ApplyLineLyrics;
   ApplyStaticLyrics: typeof ApplyStaticLyrics;
@@ -407,6 +432,50 @@ try {
     dom(staticRow).childNodes[0].nodeType,
     3,
     "Static lyrics retain an original text node before translation"
+  );
+
+  // Switching reading order reuses the same translation and live timed nodes.
+  const originalWordNodes = [...lead.childNodes].slice(0, -1);
+  const translation = lead.lastElementChild!;
+  app.positionLineTranslation(
+    lead as unknown as HTMLElement,
+    translation as unknown as HTMLElement,
+    "above"
+  );
+  assert.equal(lead.firstChild, translation);
+  assert.equal(lead.childNodes.length, originalWordNodes.length + 1);
+  originalWordNodes.forEach((word, index) => assert.equal(lead.childNodes[index + 1], word));
+  app.positionLineTranslation(
+    lead as unknown as HTMLElement,
+    translation as unknown as HTMLElement,
+    "below"
+  );
+  assert.equal(lead.childNodes.length, originalWordNodes.length + 1);
+  originalWordNodes.forEach((word, index) => assert.equal(lead.childNodes[index], word));
+  assert.equal(lead.lastChild, translation);
+
+  host.translationPosition = "above";
+  app.resetFixtureModel();
+  app.ApplySyllableLyrics({ ...input, Content: [input.Content[3]] });
+  const aboveWordRow = app.LyricsObject.Types.Syllable.Lines[0];
+  assert.ok(hasClass(dom(aboveWordRow.HTMLElement).children[0], "line-translation"));
+  assert.equal(aboveWordRow.Syllables!.Lead[0].StartTime, 4000);
+  assert.equal(aboveWordRow.Syllables!.Lead[0].EndTime, 6000);
+  app.resetFixtureModel();
+  app.ApplyLineLyrics({
+    Type: "Line",
+    StartTime: 0,
+    Content: [{ Text: "Original", Translation: "译文", StartTime: 0, EndTime: 2 }],
+  });
+  assert.equal(
+    dom(app.LyricsObject.Types.Line.Lines[0].HTMLElement).firstChild?.textContent,
+    "译文"
+  );
+  app.resetFixtureModel();
+  app.ApplyStaticLyrics({ Type: "Static", Lines: [{ Text: "Original", Translation: "译文" }] });
+  assert.equal(
+    dom(app.LyricsObject.Types.Static.Lines[0].HTMLElement).firstChild?.textContent,
+    "译文"
   );
 } finally {
   for (const [key, descriptor] of previousGlobals) {

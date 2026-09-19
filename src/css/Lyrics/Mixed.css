@@ -596,7 +596,7 @@
 #SpicyLyricsPage.SpicyRenderer
   .LyricsContainer
   .SpicyLyricsScrollContainer[data-lyrics-type="Static"] {
-  --DefaultLyricsSize: clamp(0.8rem, calc(1cqw * 5), 2.5rem);
+  --DefaultLyricsSize: calc(clamp(0.8rem, calc(1cqw * 5), 2.5rem) * var(--sl-lyrics-font-scale, 1));
 }
 
 /* Popup (PiP) static lyrics: kept intentionally a touch smaller than synced
@@ -607,7 +607,7 @@
   #SpicyLyricsPage.SpicyRenderer
   .LyricsContainer
   .SpicyLyricsScrollContainer[data-lyrics-type="Static"] {
-  --DefaultLyricsSize: clamp(1.4rem, calc(1cqw * 6), 2.3rem);
+  --DefaultLyricsSize: calc(clamp(1.4rem, calc(1cqw * 6), 2.3rem) * var(--sl-lyrics-font-scale, 1));
 }
 
 #SpicyLyricsPage.SpicyRenderer
@@ -936,16 +936,25 @@
   opacity: 1;
   scale: 1.05;
 }
-/* ===== 译文行（网易云 tlyric，追加在原文下方） ===== */
+/* Translation remains secondary in bilingual mode, above or below the lead. */
 #SpicyLyricsPage.SpicyRenderer .LyricsContainer .LyricsContent .line .line-translation {
   display: block;
   width: 100%;
   margin-top: 2px;
-  font-size: 0.58em;
+  font-size: var(--sl-lyrics-translation-size, 0.58em);
   font-weight: 500;
   line-height: 1.4;
   -webkit-text-fill-color: rgba(255, 255, 255, 0.72);
   opacity: 0.85;
+}
+
+#SpicyLyricsPage.SpicyRenderer.TranslationAbove.DisplayBilingual
+  .LyricsContainer
+  .LyricsContent
+  .line
+  .line-translation {
+  margin-top: 0;
+  margin-bottom: 2px;
 }
 
 #SpicyLyricsPage.SpicyRenderer .LyricsContainer .LyricsContent .line.Active .line-translation,
@@ -1028,165 +1037,4 @@
     animation: none;
     opacity: 0.72;
   }
-}
-
-/* ===== 逐词对照（Learning Mode）=====
-   清单由 LearningRow.ts 插在当前行 .line.Active 之后，是它的兄弟节点而非子
-   节点——.line 内部归 applyer / animator 所有，不能塞内容进去。
-   选择器铺到 .VirtualLyricsContainer（(1,6,0)，与 main.css 里 .line 那条同量级）
-   是为了压过 main.css 里
-   `#SpicyLyricsPage .LyricsContainer .LyricsContent:not(:has(.LyricsNotice)) *`
-   的 font-weight: 700 !important，否则整行变成粗体。
-   类名刻意避开 line / word / Emphasis / letter：lyrics.ts 的点击跳转用
-   closest(".line, .word, .Emphasis") 做类 token 匹配，撞名会让点对照清单就跳播放位置。 */
-#SpicyLyricsPage.SpicyRenderer
-  .LyricsContainer
-  .LyricsContent
-  .SpicyLyricsScrollContainer
-  .VirtualLyricsContainer
-  .line-learning {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 4px 6px;
-  width: 100%;
-  margin-top: 2px;
-  font-size: calc(var(--DefaultLyricsSize) * 0.34);
-  font-weight: 600 !important;
-  line-height: 1.25;
-  /* 清单是推断结果，压低存在感以免抢走正文的注意力 */
-  opacity: 0.9;
-}
-
-#SpicyLyricsPage.SpicyRenderer
-  .LyricsContainer
-  .LyricsContent
-  .SpicyLyricsScrollContainer
-  .VirtualLyricsContainer
-  .line-learning
-  .learning-token {
-  display: inline-flex;
-  flex-direction: column;
-  gap: 1px;
-  max-width: 16em;
-  padding: 3px 7px;
-  border-radius: 6px;
-  border-left: 2px solid rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.07);
-  /* 对齐置信度靠左边框着色，低置信度整体再压一层透明度 */
-  font-size: 1em;
-  font-weight: 600 !important;
-  white-space: normal;
-  word-break: break-word;
-}
-
-/* 启发式推断而非模型对齐：边框改虚线，提醒用户这不是权威切分 */
-#SpicyLyricsPage.SpicyRenderer
-  .LyricsContainer
-  .LyricsContent
-  .SpicyLyricsScrollContainer
-  .VirtualLyricsContainer
-  .line-learning[data-origin="heuristic"]
-  .learning-token {
-  border-left-style: dashed;
-}
-
-#SpicyLyricsPage.SpicyRenderer
-  .LyricsContainer
-  .LyricsContent
-  .SpicyLyricsScrollContainer
-  .VirtualLyricsContainer
-  .line-learning
-  .learning-token[data-confidence="high"] {
-  border-left-color: rgba(126, 231, 135, 0.85);
-}
-
-#SpicyLyricsPage.SpicyRenderer
-  .LyricsContainer
-  .LyricsContent
-  .SpicyLyricsScrollContainer
-  .VirtualLyricsContainer
-  .line-learning
-  .learning-token[data-confidence="medium"] {
-  border-left-color: rgba(255, 209, 102, 0.8);
-}
-
-#SpicyLyricsPage.SpicyRenderer
-  .LyricsContainer
-  .LyricsContent
-  .SpicyLyricsScrollContainer
-  .VirtualLyricsContainer
-  .line-learning
-  .learning-token[data-confidence="low"] {
-  border-left-color: rgba(255, 255, 255, 0.22);
-  opacity: 0.72;
-}
-
-#SpicyLyricsPage.SpicyRenderer
-  .LyricsContainer
-  .LyricsContent
-  .SpicyLyricsScrollContainer
-  .VirtualLyricsContainer
-  .line-learning
-  .learning-source {
-  -webkit-text-fill-color: rgba(255, 255, 255, 0.96);
-  color: rgba(255, 255, 255, 0.96);
-  /* 内层元素也被 main.css 那条 `*` 规则直接命中，字重得在它们身上再声明 */
-  font-weight: 600 !important;
-}
-
-#SpicyLyricsPage.SpicyRenderer
-  .LyricsContainer
-  .LyricsContent
-  .SpicyLyricsScrollContainer
-  .VirtualLyricsContainer
-  .line-learning
-  .learning-target {
-  -webkit-text-fill-color: rgba(255, 255, 255, 0.74);
-  color: rgba(255, 255, 255, 0.74);
-  font-weight: 500 !important;
-}
-
-/* 藏词自测：整块可点（含 padding），遮住的是译文一侧 */
-#SpicyLyricsPage.SpicyRenderer
-  .LyricsContainer
-  .LyricsContent
-  .SpicyLyricsScrollContainer
-  .VirtualLyricsContainer
-  .line-learning
-  .learning-token.learning-interactive {
-  cursor: pointer;
-}
-
-#SpicyLyricsPage.SpicyRenderer
-  .LyricsContainer
-  .LyricsContent
-  .SpicyLyricsScrollContainer
-  .VirtualLyricsContainer
-  .line-learning
-  .learning-token.learning-interactive:hover {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-/* 用模糊而不是换字符：揭示时文本不跳动，行高也不会被占位符改写 */
-#SpicyLyricsPage.SpicyRenderer
-  .LyricsContainer
-  .LyricsContent
-  .SpicyLyricsScrollContainer
-  .VirtualLyricsContainer
-  .line-learning
-  .learning-target.learning-hidden {
-  filter: blur(0.42em);
-  user-select: none;
-}
-
-#SpicyLyricsPage.SpicyRenderer
-  .LyricsContainer
-  .LyricsContent
-  .SpicyLyricsScrollContainer
-  .VirtualLyricsContainer
-  .line-learning
-  .learning-token:focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: 2px;
 }

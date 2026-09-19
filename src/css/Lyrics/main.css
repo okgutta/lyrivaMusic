@@ -24,7 +24,9 @@
   --ActiveTextGlowDef: rgba(255, 255, 255, 0.4) 0px 0px 14px;
   --StrongTextGlowDef: rgba(255, 255, 255, 0.68) 0px 0px 16.4px;
   --StrongerTextGlowDef: rgba(255, 255, 255, 0.74) 0px 0px 16px;
-  --DefaultLyricsSize: clamp(1.85rem, calc(1cqw * 7), 3.5rem);
+  --DefaultLyricsSize: calc(
+    clamp(1.85rem, calc(1cqw * 7), 3.5rem) * var(--sl-lyrics-font-scale, 1)
+  );
   --amll-lyric-player-font-size: var(--DefaultLyricsSize);
   --Simplebar-Scrollbar-Color: rgba(255, 255, 255, 0.6);
   --vertical-gap: 0px;
@@ -78,7 +80,9 @@
      popup size (the floor dominates here, since the popup container is
      narrow), scales with width, and is capped so very wide popups don't end
      up with oversized text. */
-  --DefaultLyricsSize: clamp(1.7rem, calc(1cqw * 5.5), 2.6rem);
+  --DefaultLyricsSize: calc(
+    clamp(1.7rem, calc(1cqw * 5.5), 2.6rem) * var(--sl-lyrics-font-scale, 1)
+  );
 }
 
 /* #SpicyLyricsPage.Fullscreen.MinimalLyricsMode .LyricsContainer .LyricsContent {

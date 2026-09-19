@@ -6,6 +6,7 @@ import { DestroyAllLyricsContainers } from "../../utils/Lyrics/Applyer/CreateLyr
 import ApplyLyrics from "../../utils/Lyrics/Global/Applyer.ts";
 import {
   addLinesEvListener,
+  LyricsObject,
   isRomanized,
   removeLinesEvListener,
   setRomanizedStatus,
@@ -54,7 +55,18 @@ import { CleanUpIsByCommunity } from "../../utils/Lyrics/Applyer/Credits/ApplyIs
 import { openSettingsPanel } from "../../utils/settings.ts";
 import Logger from "../../utils/Logger.ts";
 import { ApplyExperimentClasses, onExperimentChange } from "../../utils/experiments.ts";
-import { triggerRemeasureLV } from "../../utils/Lyrics/LyricsVirtualizer.ts";
+import {
+  refreshReadingLayoutLV,
+  triggerRemeasureLV,
+} from "../../utils/Lyrics/LyricsVirtualizer.ts";
+import {
+  $lyricsFontScale,
+  $lyricsTranslationSize,
+  $lyricsLineSpacing,
+  $lyricsTranslationPosition,
+  normalizeReadingPreferences,
+} from "../../utils/Lyrics/readingPreferences.ts";
+import { applyReadingLayout } from "../../utils/Lyrics/readingLayout.ts";
 import {
   $translationState,
   requestTranslationToggle,
@@ -211,6 +223,7 @@ async function OpenPage(
 
   // 译文显示模式：三个互斥类，纯 CSS 决定原文/译文谁可见（默认双语 = 历史行为）。
   ApplyTranslationDisplayClasses(elem, $lyricsTranslationDisplay.get());
+  ApplyReadingPreferences(elem);
 
   ApplyExperimentClasses(elem);
 
@@ -750,6 +763,32 @@ function ApplyTranslationDisplayClasses(
   elem.classList.toggle("DisplayOriginal", display === "original");
   elem.classList.toggle("DisplayTranslated", display === "translated");
   elem.classList.toggle("DisplayBilingual", display === "bilingual");
+}
+
+function ApplyReadingPreferences(elem: HTMLElement): void {
+  const preferences = normalizeReadingPreferences({
+    fontScale: $lyricsFontScale.get(),
+    translationSize: $lyricsTranslationSize.get(),
+    lineSpacing: $lyricsLineSpacing.get(),
+    translationPosition: $lyricsTranslationPosition.get(),
+  });
+  applyReadingLayout(
+    elem,
+    preferences,
+    Object.values(LyricsObject.Types).flatMap(({ Lines }) => Lines.map((line) => line.HTMLElement))
+  );
+  refreshReadingLayoutLV(preferences.lineSpacing);
+}
+
+for (const preference of [
+  $lyricsFontScale,
+  $lyricsTranslationSize,
+  $lyricsLineSpacing,
+  $lyricsTranslationPosition,
+]) {
+  preference.listen(() => {
+    if (PageContainer) ApplyReadingPreferences(PageContainer);
+  });
 }
 
 // --- Reactive setting subscriptions ---

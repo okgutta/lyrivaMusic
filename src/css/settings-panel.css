@@ -54,7 +54,8 @@ sl-generic-modal.SpicyLyricsModal
   background: transparent;
 }
 .sl-sp-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(var(--tap-min), 1fr) minmax(0, 240px) minmax(var(--tap-min), 1fr);
   align-items: center;
   flex-shrink: 0;
   gap: 16px;
@@ -69,17 +70,19 @@ sl-generic-modal.SpicyLyricsModal
   letter-spacing: -0.015em;
 }
 .sl-sp-header .sl-sp-search-wrap {
-  flex: 1;
+  width: 100%;
+  justify-self: center;
   max-width: 240px;
   min-width: 0;
-  margin-left: auto;
+  margin: 0;
 }
 .sl-sp-close {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  margin-left: auto;
+  justify-self: end;
+  margin-left: 0;
   width: var(--tap-min);
   height: var(--tap-min);
   border: 0;
@@ -117,6 +120,7 @@ sl-generic-modal.SpicyLyricsModal
   box-shadow: inset 0 0 0 1px var(--slsp-hairline);
 }
 .sl-sp-sidebar-item {
+  appearance: none;
   min-width: 0;
   min-height: 36px;
   padding: 7px 10px;
@@ -139,7 +143,7 @@ sl-generic-modal.SpicyLyricsModal
 .sl-sp-sidebar-item--active {
   background: var(--accent-tint-bg-hover);
   color: var(--color-text-primary);
-  box-shadow: var(--liquid-edge);
+  box-shadow: none;
 }
 .sl-sp-sidebar-item:focus-visible {
   outline: 2px solid var(--accent);
@@ -793,6 +797,139 @@ sl-generic-modal.SpicyLyricsModal
   pointer-events: none;
 }
 
+/* Reading options align right; number controls keep a stable slot for reset. */
+.sl-sp-section--reading {
+  .sl-sp-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 220px);
+    min-height: 58px;
+  }
+
+  .sl-sp-control,
+  .sl-sp-segmented,
+  .sl-sp-stepper {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .sl-sp-segmented-item {
+    flex: 1;
+  }
+
+  .sl-sp-segmented-item--active {
+    box-shadow: none;
+  }
+
+  .sl-sp-row--disabled .sl-sp-segmented {
+    opacity: 1;
+  }
+}
+
+.sl-sp-stepper {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  width: 220px;
+}
+
+.sl-sp-stepper-field {
+  grid-area: 1 / 2;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
+  align-items: center;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--slsp-well);
+  box-shadow: inset 0 0 0 1px var(--slsp-hairline);
+}
+
+.sl-sp-stepper-button,
+.sl-sp-stepper-reset {
+  appearance: none;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  cursor: pointer;
+  transition: background 150ms ease;
+
+  &:not(:disabled):hover {
+    background: var(--accent-tint-bg);
+  }
+
+  &:not(:disabled):active {
+    background: var(--accent-tint-bg-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--slsp-accent-ring);
+    outline-offset: -2px;
+  }
+}
+
+.sl-sp-stepper-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0;
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+}
+
+.sl-sp-stepper-value {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  min-width: 0;
+  color: var(--color-text-primary);
+  font-size: var(--text-caption-size) !important;
+  font-weight: var(--w-medium);
+  font-variant-numeric: tabular-nums;
+
+  input {
+    appearance: textfield;
+    width: 3.5ch;
+    min-width: 0;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: center;
+
+    &::-webkit-inner-spin-button,
+    &::-webkit-outer-spin-button {
+      appearance: none;
+      margin: 0;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--slsp-accent-ring);
+      outline-offset: 0;
+    }
+  }
+
+  span {
+    color: var(--color-text-secondary);
+  }
+}
+
+.sl-sp-stepper-reset {
+  grid-area: 1 / 1;
+  min-height: 32px;
+  padding: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption-size) !important;
+}
+
 /* Action controls. */
 .sl-sp-btn {
   border: none;
@@ -1187,6 +1324,10 @@ sl-generic-modal.SpicyLyricsModal
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .sl-sp-section--reading .sl-sp-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 220px);
+    align-items: center;
+  }
   .sl-sp-detail-footer {
     align-items: stretch;
     flex-direction: column;
@@ -1200,5 +1341,12 @@ sl-generic-modal.SpicyLyricsModal
   }
   .sl-sp-nav-value .sl-sp-nav-value-text {
     max-width: 130px;
+  }
+}
+
+@container slsettings (max-width: 380px) {
+  .sl-sp-section--reading .sl-sp-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
   }
 }
