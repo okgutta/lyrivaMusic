@@ -1,6 +1,7 @@
 import fetchLyrics, { cancelLyricsFetch } from "../../utils/Lyrics/fetchLyrics.ts";
 import { $forceCompactMode } from "../../utils/uiState.ts";
 import "../../css/Loaders/DotLoader.css";
+import "../../css/lyrics-reading.css";
 import { DestroyAllLyricsContainers } from "../../utils/Lyrics/Applyer/CreateLyricsContainer.ts";
 import ApplyLyrics from "../../utils/Lyrics/Global/Applyer.ts";
 import {
@@ -255,7 +256,6 @@ async function OpenPage(
   }
 
   PageResizeListener = new ResizeObserver(() => {
-    if (!Fullscreen.IsOpen || !Fullscreen.CinemaViewOpen) return;
     Compactify(elem);
   });
 
@@ -291,20 +291,24 @@ async function OpenPage(
   Global.Event.evoke("page:open", { cardMode: IsCardMode });
 }
 
-export const isSizeReadyToBeCompacted = () => window.matchMedia("(max-width: 70.812rem)").matches;
+export const isSizeReadyToBeCompacted = (element = PageContainer) => {
+  if (!element || element.clientWidth <= 0) return false;
+  // Hysteresis keeps sidebar resizing from repeatedly rebuilding the same layout.
+  const threshold = element.classList.contains("CompactifyEnabledCompactMode") ? 820 : 780;
+  return element.clientWidth < threshold;
+};
 
 export function Compactify(Element: HTMLElement | undefined = undefined) {
-  if (!Fullscreen.IsOpen) return;
   const elem = Element ?? PageContainer;
-  if (!elem) return;
-  if (isSizeReadyToBeCompacted()) {
+  if (!elem || IsCardMode || IsPIP) return;
+  if (isSizeReadyToBeCompacted(elem)) {
     elem.classList.add("CompactifyEnabledCompactMode");
-    EnableCompactMode();
+    if (!IsCompactMode()) EnableCompactMode();
   } else {
     if (!elem.classList.contains("CompactifyEnabledCompactMode")) return;
     elem.classList.remove("CompactifyEnabledCompactMode");
     if (elem.classList.contains("ForcedCompactMode")) return;
-    DisableCompactMode();
+    if (IsCompactMode()) DisableCompactMode();
   }
 }
 

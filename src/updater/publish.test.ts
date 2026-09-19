@@ -28,7 +28,6 @@ try {
   await writeFile(join(directory, "dist/lyrivamusic-runtime.js"), runtime);
   await writeFile(join(directory, "dist/manifest.json"), manifest);
   await writeFile(join(directory, "dist/lyrivamusic.js"), "installer");
-  await writeFile(join(directory, "dist/SHA256SUMS.txt"), "test-checksums");
   await writeFile(join(directory, "docs/releases/v1.3.0.md"), "Release notes");
   // Replace fetch before importing the actual publisher. No network call can escape
   // this fixture; unknown requests fail the child process immediately.
@@ -39,6 +38,7 @@ import { appendFileSync, readFileSync } from "node:fs";
 const mode = process.env.RELEASE_TEST_MODE;
 const digest = bytes => createHash("sha256").update(bytes).digest("hex");
 let uploads = 0, verified = 0, channelPublished = false;
+const removedAssets = [];
 const draft = { id: 1, tag_name: "v1.3.0", draft: true, assets: [], upload_url: "https://uploads.github.com/repos/okgutta/lyrivaMusic/releases/1/assets{?name}" };
 globalThis.fetch = async (input, init = {}) => {
   const url = new URL(input);
@@ -48,7 +48,12 @@ globalThis.fetch = async (input, init = {}) => {
   const json = (value, status = 200) => new Response(JSON.stringify(value), { status });
   if (path === "/releases/tags/v1.3.0") {
     if (mode === "published") return json({ ...draft, draft: false });
-    if (mode === "retry") return json({ ...draft, assets: ["lyrivamusic.js", "lyrivamusic-runtime.js", "manifest.json", "SHA256SUMS.txt"].map(name => ({ name, digest: "sha256:" + digest(readFileSync("dist/" + name)) })) });
+    if (["retry", "retry-legacy", "installer-mismatch"].includes(mode)) {
+      const assets = [{ id: 10, name: "lyrivamusic.js", digest: mode === "installer-mismatch" ? "sha256:wrong" : "sha256:" + digest(readFileSync("dist/lyrivamusic.js")) }];
+      if (mode === "retry-legacy" || mode === "installer-mismatch") assets.push(...["lyrivamusic-runtime.js", "manifest.json", "SHA256SUMS.txt"].map((name, index) => ({id: 11 + index, name})));
+      if (mode === "retry-legacy") assets.push({ id: 14, name: "maintainer-notes.txt" });
+      return json({ ...draft, assets });
+    }
     return json(null, 404);
   }
   if (path === "/releases/latest") return json({ tag_name: mode === "stale" ? "v1.4.0" : "v1.2.0" });
@@ -60,16 +65,25 @@ globalThis.fetch = async (input, init = {}) => {
   }
   if (path === "/releases" && method === "POST") return json(draft);
   if (url.hostname === "uploads.github.com") {
+    assert.equal(url.searchParams.get("name"), "lyrivamusic.js", "only the installer is a Release attachment");
     uploads++;
     return json({ digest: "sha256:" + (mode === "bad-upload" ? "bad" : digest(init.body)) });
+  }
+  if (path.startsWith("/releases/assets/") && method === "DELETE") {
+    assert.equal(mode, "retry-legacy", "clean internal attachments only on an existing draft");
+    const id = Number(path.split("/").pop());
+    assert.ok([11, 12, 13].includes(id), "never remove the installer");
+    removedAssets.push(id);
+    return new Response(null, { status: 204 });
   }
   if (path === "/git/ref/heads/updates") return mode === "immutable" ? json({ object: { sha: "parent" } }) : json(null, 404);
   if (path === "/git/commits/parent") return json({ sha: "parent", tree: { sha: "old-tree" } });
   if (path.startsWith("/contents/")) return json({ sha: "original-blob" });
   if (path === "/git/blobs") return json({ sha: "new-blob" });
   if (path === "/git/trees") {
-    assert.equal(uploads, mode === "retry" ? 0 : 4, "upload all assets before channel publication");
-    assert.equal(JSON.parse(init.body).tree.length, 2, "runtime and manifest share one commit");
+    assert.equal(uploads, ["retry", "retry-legacy"].includes(mode) ? 0 : 1, "verify the single installer before channel publication");
+    assert.deepEqual(removedAssets, mode === "retry-legacy" ? [11, 12, 13] : []);
+    assert.deepEqual(JSON.parse(init.body).tree.map(item => item.path).sort(), ["versions/v1.3.0/lyrivamusic-runtime.js", "versions/v1.3.0/manifest.json"], "runtime and manifest retain the existing update URLs in one commit");
     return json({ sha: "tree" });
   }
   if (path === "/git/commits") return json({ sha: "commit" });
@@ -90,6 +104,8 @@ globalThis.fetch = async (input, init = {}) => {
   for (const mode of [
     "success",
     "retry",
+    "retry-legacy",
+    "installer-mismatch",
     "published",
     "stale",
     "bad-upload",
@@ -112,14 +128,23 @@ globalThis.fetch = async (input, init = {}) => {
         },
       }
     );
-    const failed = ["bad-upload", "raw-unavailable", "immutable"].includes(mode);
+    const failed = ["bad-upload", "raw-unavailable", "immutable", "installer-mismatch"].includes(
+      mode
+    );
     assert.equal(result.status === 0, !failed, `${mode}: ${result.stderr}`);
     const requests = await readFile(join(directory, "requests.log"), "utf8");
-    assert.equal(requests.includes("PATCH /releases/1"), ["success", "retry"].includes(mode), mode);
-    if (["published", "stale"].includes(mode)) assert.doesNotMatch(requests, /POST|PATCH/);
+    assert.equal(
+      requests.includes("PATCH /releases/1"),
+      ["success", "retry", "retry-legacy"].includes(mode),
+      mode
+    );
+    if (["published", "stale"].includes(mode)) assert.doesNotMatch(requests, /POST|PATCH|DELETE/);
     if (mode === "retry") assert.doesNotMatch(requests, /assets/);
+    if (mode === "installer-mismatch") assert.doesNotMatch(requests, /POST|PATCH|DELETE/);
   }
-  console.log("Release publication ordering, retry and fail-closed tests passed");
+  console.log(
+    "Single-file Release publication, legacy draft cleanup and update compatibility tests passed"
+  );
 } finally {
   await rm(directory, { recursive: true, force: true });
 }

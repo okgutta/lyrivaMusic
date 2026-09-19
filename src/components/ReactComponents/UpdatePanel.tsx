@@ -1,4 +1,5 @@
 import type { UpdateState } from "../../updater/contracts.ts";
+import UpdateReleaseNotes from "./UpdateReleaseNotes.tsx";
 
 interface Props {
   state: UpdateState;
@@ -35,7 +36,7 @@ export default function UpdatePanel({
 }: Props) {
   const { phase, latestVersion, loaderUpdateRequired } = state;
   const pending = Boolean(latestVersion && latestVersion !== state.currentVersion);
-  const manual = !automaticUpdates || loaderUpdateRequired;
+  const manual = !automaticUpdates || Boolean(loaderUpdateRequired);
   const busy = phase === "checking" || phase === "downloading" || phase === "available";
   const progress =
     typeof state.progress === "number" && Number.isFinite(state.progress)
@@ -43,67 +44,85 @@ export default function UpdatePanel({
       : undefined;
   const status = manual
     ? loaderUpdateRequired
-      ? "需要更新安装程序"
-      : "当前使用手动安装版"
+      ? "下载新版即可继续"
+      : "手动更新 lyrivaMusic"
     : phase === "ready"
-      ? "更新已下载"
+      ? "新版本已就绪"
       : phase === "downloading"
         ? "正在下载更新"
         : phase === "available"
-          ? "发现新版本，正在准备下载"
+          ? "发现新版本"
           : phase === "checking"
             ? "正在检查更新"
             : phase === "error"
               ? "更新未完成"
-              : "当前已是最新版本";
+              : "已是最新版本";
+
+  const description = manual
+    ? "下载 lyrivamusic.js，替换原文件后运行 spicetify apply。"
+    : phase === "ready"
+      ? "重新加载后即可使用，也可以留到下次启动。"
+      : phase === "downloading" || phase === "available"
+        ? "可以继续听歌，下载会在后台完成。"
+        : phase === "checking"
+          ? "正在获取最新版本信息。"
+          : phase === "error"
+            ? state.error || "暂时无法连接更新服务，请稍后重试。"
+            : "有新版本时，会在这里提醒你。";
 
   return (
-    <div className="sl-update-panel">
-      <dl className="sl-update-versions">
-        <div>
-          <dt>当前版本</dt>
-          <dd>v{state.currentVersion}</dd>
+    <div className="sl-update-panel" data-phase={manual ? "manual" : phase}>
+      <div className="sl-update-body">
+        <div className="sl-update-status" role="status" aria-live="polite" aria-atomic="true">
+          <p className="sl-update-brand">lyrivaMusic</p>
+          <h2 className="sl-update-status-title">{status}</h2>
+          <p className="sl-update-versions">
+            <span>
+              {pending ? "当前" : "版本"} v{state.currentVersion}
+            </span>
+            {pending && (
+              <>
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M5 12h14m-5-5 5 5-5 5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span className="sl-update-next-version" aria-label={`新版本 ${latestVersion}`}>
+                  v{latestVersion}
+                </span>
+              </>
+            )}
+          </p>
+          <p className={phase === "error" && !manual ? "sl-update-error" : "sl-update-description"}>
+            {description}
+          </p>
         </div>
-        {pending && (
-          <div>
-            <dt>新版本</dt>
-            <dd>v{latestVersion}</dd>
+
+        {!manual && (phase === "checking" || phase === "downloading" || phase === "available") && (
+          <div className="sl-update-progress">
+            <progress
+              aria-label={phase === "checking" ? "检查更新进度" : "更新下载进度"}
+              max={100}
+              value={phase === "downloading" ? progress : undefined}
+            />
+            {phase === "downloading" && typeof progress === "number" && (
+              <span aria-hidden="true">{Math.round(progress)}%</span>
+            )}
           </div>
         )}
-      </dl>
 
-      <div className="sl-update-status" role="status" aria-live="polite" aria-atomic="true">
-        <p className="sl-update-status-title">{status}</p>
-        {manual ? (
-          <p className="sl-update-description">
-            {loaderUpdateRequired
-              ? "请从发布页下载安装程序，完成后重新加载 Spotify。"
-              : "从发布页下载扩展，替换已安装的文件并运行 spicetify apply。"}
-          </p>
-        ) : phase === "ready" ? (
-          <p className="sl-update-description">重新加载 Spotify 后生效。也可以稍后再加载。</p>
-        ) : phase === "downloading" || phase === "available" ? (
-          <p className="sl-update-description">关闭窗口后会继续下载，完成后可在设置中重新加载。</p>
-        ) : phase === "error" ? (
-          <p className="sl-update-error">{state.error || "暂时无法获取更新，请稍后重试。"}</p>
-        ) : null}
+        {pending && state.notes?.trim() && (
+          <section className="sl-update-notes" aria-label="版本更新内容">
+            <p className="sl-update-section-label">本次更新</p>
+            <UpdateReleaseNotes notes={state.notes} />
+          </section>
+        )}
       </div>
-
-      {!manual && (phase === "downloading" || phase === "available") && (
-        <div className="sl-update-progress">
-          <progress aria-label="更新下载进度" max={100} value={progress} />
-          <span aria-hidden="true">
-            {progress === undefined ? "下载中…" : `${Math.round(progress)}%`}
-          </span>
-        </div>
-      )}
-
-      {pending && state.notes?.trim() && (
-        <section className="sl-update-notes" aria-label="版本更新内容">
-          <h2>更新内容</h2>
-          <p>{state.notes}</p>
-        </section>
-      )}
 
       <div className="sl-update-footer">
         <a
@@ -112,32 +131,59 @@ export default function UpdatePanel({
           target="_blank"
           rel="noopener noreferrer"
         >
-          查看发布页
+          GitHub 发布页
+          <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M7 17 17 7M7 7h10v10"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </a>
         <div className="sl-update-actions">
           {manual ? (
-            <button type="button" className="sl-sp-btn" onClick={onClose}>
-              关闭
-            </button>
+            <a
+              className="sl-update-button sl-update-button--primary"
+              href={releaseLink(state.releaseUrl)}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              下载新版
+            </a>
           ) : phase === "ready" ? (
             <>
-              <button type="button" className="sl-sp-btn" onClick={onClose}>
+              <button
+                type="button"
+                className="sl-update-button sl-update-button--quiet"
+                onClick={onClose}
+              >
                 稍后
               </button>
-              <button type="button" className="sl-sp-btn sl-sp-btn--primary" onClick={onReload}>
+              <button
+                type="button"
+                className="sl-update-button sl-update-button--primary"
+                onClick={onReload}
+              >
                 重新加载
               </button>
             </>
           ) : phase === "error" ? (
-            <button type="button" className="sl-sp-btn sl-sp-btn--primary" onClick={onRetry}>
+            <button
+              type="button"
+              className="sl-update-button sl-update-button--primary"
+              onClick={onRetry}
+            >
               重试
             </button>
           ) : busy ? (
-            <button type="button" className="sl-sp-btn" onClick={onClose}>
-              稍后
+            <button type="button" className="sl-update-button" onClick={onClose}>
+              {phase === "checking" ? "关闭" : "后台下载"}
             </button>
           ) : (
-            <button type="button" className="sl-sp-btn" onClick={onCheck}>
+            <button type="button" className="sl-update-button" onClick={onCheck}>
               检查更新
             </button>
           )}

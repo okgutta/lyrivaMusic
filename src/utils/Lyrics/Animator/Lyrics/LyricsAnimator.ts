@@ -5,6 +5,7 @@ import {
   $currentLyricsType,
   $simpleLyricsMode,
   $simpleLyricsModeRenderingType,
+  $lyricsContainerExists,
 } from "../../../../utils/stores.ts";
 import {
   LyricsObject,
@@ -12,9 +13,37 @@ import {
   preHiddenDotLineMs,
   type LyricsSyllable,
 } from "../../lyrics.ts";
-import { BlurMultiplier, timeOffset } from "../Shared.ts";
-import { setOnNewElementMounted } from "../../LyricsVirtualizer.ts";
+import { timeOffset } from "../Shared.ts";
+import {
+  getLyricsLayoutRevision,
+  getLyricsLineGeometry,
+  getLyricsViewportHeight,
+  getLyricsVirtualizer,
+  setOnNewElementMounted,
+} from "../../LyricsVirtualizer.ts";
 import { Spring } from "../../../../modules/Spring.ts";
+import { softenWordMotion } from "./wordEmphasis.ts";
+import { ReducedMotionStyles } from "./reducedMotion.ts";
+import { computeDistanceBlur, type BlurLineGeometry } from "./blurGeometry.ts";
+import { IsCompactMode } from "../../../../components/Utils/CompactMode.ts";
+import { IsPIP } from "../../../../components/Utils/PopupLyrics.ts";
+
+const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
+const stationaryMotion = new ReducedMotionStyles();
+const lineMotionPreferences = new WeakMap<HTMLElement, boolean>();
+
+function applyMotionPreference(line: LyricsSyllable, reduced: boolean): void {
+  if (lineMotionPreferences.get(line.HTMLElement) === reduced) return;
+  lineMotionPreferences.set(line.HTMLElement, reduced);
+  const apply = (element: HTMLElement) => {
+    if (stationaryMotion.apply(element, reduced)) _styleCache.delete(element);
+  };
+  apply(line.HTMLElement);
+  for (const word of line.Syllables?.Lead ?? []) {
+    apply(word.HTMLElement);
+    for (const letter of word.Letters ?? []) apply(letter.HTMLElement);
+  }
+}
 
 const getSLMAnimation = (duration: number) => {
   return `SLM_Animation ${duration}ms linear forwards`;
@@ -228,6 +257,7 @@ function flushStyleBatch(): void {
   if (_styleQueue.size === 0) return;
   for (const [el, props] of _styleQueue) {
     for (const [prop, value] of props) {
+      if (stationaryMotion.protects(el, prop)) continue;
       el.style.setProperty(prop, value);
     }
   }
@@ -334,6 +364,103 @@ const createLineSprings = () => {
 
 export let Blurring_LastLine: number | null = null;
 let lastFrameTime = performance.now();
+type BlurLine = Pick<LyricsSyllable, "HTMLElement" | "StartTime" | "EndTime">;
+let blurLines: BlurLine[] | null = null;
+let blurRevision = -1;
+let blurCompactMode: boolean | null = null;
+let blurActiveSignature = "";
+let blurLayoutDirty = true;
+let fallbackViewport: HTMLElement | null = null;
+let fallbackGeometry = new Map<HTMLElement, BlurLineGeometry>();
+let fallbackResizeObserver: ResizeObserver | null = null;
+
+function resetBlurLayout(): void {
+  fallbackResizeObserver?.disconnect();
+  fallbackResizeObserver = null;
+  fallbackViewport = null;
+  fallbackGeometry.clear();
+  blurLines = null;
+  blurLayoutDirty = true;
+}
+
+$lyricsContainerExists.listen((exists) => {
+  if (!exists) resetBlurLayout();
+});
+
+function updateSpatialBlur(
+  arr: BlurLine[],
+  activeIndex: number,
+  position: number,
+  activeSignature: string
+): void {
+  const active = arr[activeIndex]?.HTMLElement;
+  if (!active?.isConnected) return;
+  const revision = getLyricsLayoutRevision();
+  const compactMode = IsCompactMode();
+  if (
+    blurLines === arr &&
+    Blurring_LastLine === activeIndex &&
+    blurRevision === revision &&
+    blurCompactMode === compactMode &&
+    blurActiveSignature === activeSignature &&
+    !blurLayoutDirty
+  )
+    return;
+
+  if (blurLines !== arr) {
+    resetBlurLayout();
+    blurLines = arr;
+  }
+  let activeGeometry = getLyricsLineGeometry(active);
+  let viewportHeight = getLyricsViewportHeight();
+  if (!activeGeometry) {
+    // Wait for the virtualizer's next measurement instead of treating a cache
+    // that is still warming up as a non-virtual renderer.
+    if (getLyricsVirtualizer()) return;
+    // A non-virtual renderer is measured only on a line change or a layout
+    // invalidation. ResizeObserver catches wraps, translations and font loads.
+    if (!fallbackResizeObserver) {
+      fallbackViewport = active.closest<HTMLElement>(".simplebar-content-wrapper, .LyricsContent");
+      fallbackResizeObserver = new ResizeObserver(() => {
+        blurLayoutDirty = true;
+      });
+      if (fallbackViewport) fallbackResizeObserver.observe(fallbackViewport);
+      for (const line of arr) fallbackResizeObserver.observe(line.HTMLElement);
+    }
+    viewportHeight = fallbackViewport?.clientHeight ?? 0;
+    const geometry = new Map<HTMLElement, BlurLineGeometry>();
+    for (const line of arr) {
+      if (!line.HTMLElement.isConnected) continue;
+      const rect = line.HTMLElement.getBoundingClientRect();
+      geometry.set(line.HTMLElement, { top: rect.top, height: rect.height });
+    }
+    fallbackGeometry = geometry;
+    activeGeometry = geometry.get(active) ?? null;
+  }
+  if (!activeGeometry) return;
+  // Match the existing top/center follow anchors without reading layout every
+  // frame. Above and below each have their own remaining viewport distance.
+  const activeViewportCenter = compactMode
+    ? (IsPIP ? 50 : 85) + activeGeometry.height / 2
+    : viewportHeight / 2 - 30;
+  for (const line of arr) {
+    const el = line.HTMLElement;
+    if (!el.isConnected) continue;
+    const geometry = getLyricsLineGeometry(el) ?? fallbackGeometry.get(el);
+    const activeNow = getElementState(position, line.StartTime, line.EndTime) === "Active";
+    const blur =
+      !geometry || activeNow
+        ? 0
+        : computeDistanceBlur(geometry, activeGeometry, viewportHeight, activeViewportCenter);
+    setStyleIfChanged(el, "--BlurAmount", `${blur}px`, 0.25);
+    promoteToGPUWithFilter(el);
+  }
+  Blurring_LastLine = activeIndex;
+  blurRevision = revision;
+  blurCompactMode = compactMode;
+  blurActiveSignature = activeSignature;
+  blurLayoutDirty = false;
+}
 
 // When the virtualizer mounts a previously off-screen element, reset
 // Blurring_LastLine so that applyBlur runs on the next animation frame and
@@ -344,6 +471,7 @@ setOnNewElementMounted(() => {
 
 export function setBlurringLastLine(c: number | null) {
   Blurring_LastLine = c;
+  if (c === null) resetBlurLayout();
 }
 
 function getElementState(
@@ -372,6 +500,19 @@ function resetSyllableLine(line: LyricsSyllable): void {
     word.SLMAnimated = false;
     word.PreSLMAnimated = false;
     word.HTMLElement.style.animation = "none";
+    if (!word.Dot && !word.LetterGroup) {
+      const resting = softenWordMotion(word.EndTime - word.StartTime, {
+        scale: ScaleSpline.at(0),
+        yOffset: YOffsetSpline.at(0),
+        glow: 0,
+      });
+      setStyleIfChanged(word.HTMLElement, "scale", `${resting.scale}`, 0.001);
+      setStyleIfChanged(
+        word.HTMLElement,
+        "transform",
+        `translate3d(0, calc(var(--DefaultLyricsSize) * ${resting.yOffset}), 0)`
+      );
+    }
     word.HTMLElement.style.setProperty(
       $simpleLyricsMode.get() ? "--SLM_GradientPosition" : "--gradient-position",
       $simpleLyricsMode.get() ? "-50%" : "-20%"
@@ -401,46 +542,11 @@ export function Animate(position: number): void {
   lastFrameTime = now;
 
   const CurrentLyricsType = $currentLyricsType.get();
+  const reducedMotion = motionPreference.matches;
+  let activeBlurIndex: number | null = null;
+  let activeBlurSignature = "";
 
   if (!CurrentLyricsType || CurrentLyricsType === "None") return;
-
-  // Define proper types for the arrays and indices
-  const applyBlur = (
-    arr: Array<{ HTMLElement: HTMLElement; StartTime: number; EndTime: number }>,
-    activeIndex: number,
-    blurMultiplierValue: number
-  ): void => {
-    if (!arr[activeIndex]) return;
-
-    // Promote line elements for filter changes
-    promoteToGPUWithFilter(arr[activeIndex].HTMLElement);
-
-    const max = BlurMultiplier * 5 + BlurMultiplier * 0.465;
-
-    for (let i = 0; i < arr.length; i++) {
-      const el = arr[i].HTMLElement;
-      // The virtualizer only mounts a small window of elements at a time.
-      // Skip elements that are not in the DOM — writing styles to detached
-      // elements is wasteful: it populates _styleQueue with hundreds of entries
-      // that flushStyleBatch() then has to flush (style.setProperty on each),
-      // creating a large burst of DOM work every time the active line changes.
-      // When an off-screen element is later mounted, the next active-line change
-      // will call applyBlur again and catch it with the correct values.
-      if (!el.isConnected) continue;
-      const state = getElementState(ProcessedPosition, arr[i].StartTime, arr[i].EndTime);
-      const distance = Math.abs(i - activeIndex);
-      const blurAmount = distance === 0 ? 0 : Math.min(blurMultiplierValue * distance, max);
-
-      // Active elements and the active line get zero blur
-      const value = state === "Active" || distance === 0 ? "0px" : `${blurAmount}px`;
-
-      // Cache + batch style writes to avoid thrash
-      setStyleIfChanged(el, "--BlurAmount", value, 0.25);
-
-      // Hint filter changes to the compositor
-      promoteToGPUWithFilter(el);
-    }
-  };
 
   if (CurrentLyricsType === "Syllable") {
     const arr = LyricsObject.Types.Syllable.Lines;
@@ -448,13 +554,13 @@ export function Animate(position: number): void {
     for (let index = 0; index < arr.length; index++) {
       const line = arr[index];
       if (!line.HTMLElement.isConnected) continue;
+      applyMotionPreference(line, reducedMotion);
       const lineState = getElementState(ProcessedPosition, line.StartTime, line.EndTime);
 
       if (lineState === "Active") {
-        if (Blurring_LastLine !== index) {
-          applyBlur(arr, index, BlurMultiplier);
-          Blurring_LastLine = index;
-        }
+        activeBlurSignature += `${index},`;
+        if (activeBlurIndex === null || (arr[activeBlurIndex].BGLine && !line.BGLine))
+          activeBlurIndex = index;
 
         if (!line.HTMLElement.classList.contains("Active")) {
           line.HTMLElement.classList.add("Active");
@@ -510,8 +616,7 @@ export function Animate(position: number): void {
             let targetGlow: number;
             let targetGradientPos: number;
 
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const totalDuration = word.EndTime - word.StartTime; // Kept for future reference
+            const totalDuration = word.EndTime - word.StartTime;
 
             if (wordState === "Active") {
               targetScale = ScaleSpline.at(percentage);
@@ -543,9 +648,15 @@ export function Animate(position: number): void {
             word.AnimatorStore.YOffset.SetGoal(targetYOffset);
             word.AnimatorStore.Glow.SetGoal(targetGlow);
 
-            const currentScale = word.AnimatorStore.Scale.Step(deltaTime);
-            const currentYOffset = word.AnimatorStore.YOffset.Step(deltaTime);
-            const currentGlow = word.AnimatorStore.Glow.Step(deltaTime);
+            const rawMotion = {
+              scale: word.AnimatorStore.Scale.Step(deltaTime),
+              yOffset: word.AnimatorStore.YOffset.Step(deltaTime),
+              glow: word.AnimatorStore.Glow.Step(deltaTime),
+            };
+            // Preserve the existing per-letter choreography, while ordinary
+            // timed words (including background vocals) use restrained motion.
+            const motion = isLetterGroup ? rawMotion : softenWordMotion(totalDuration, rawMotion);
+            const { scale: currentScale, yOffset: currentYOffset, glow: currentGlow } = motion;
 
             setStyleIfChanged(word.HTMLElement, "scale", `${currentScale}`, 0.001);
             // Use translate3d to ensure GPU-accelerated transforms
@@ -1103,9 +1214,15 @@ export function Animate(position: number): void {
               word.AnimatorStore.Scale.SetGoal(ScaleSpline.at(1));
               word.AnimatorStore.YOffset.SetGoal(YOffsetSpline.at(1));
               word.AnimatorStore.Glow.SetGoal(GlowSpline.at(1));
-              const currentScale = word.AnimatorStore.Scale.Step(deltaTime);
-              const currentYOffset = word.AnimatorStore.YOffset.Step(deltaTime);
-              const currentGlow = word.AnimatorStore.Glow.Step(deltaTime);
+              const rawMotion = {
+                scale: word.AnimatorStore.Scale.Step(deltaTime),
+                yOffset: word.AnimatorStore.YOffset.Step(deltaTime),
+                glow: word.AnimatorStore.Glow.Step(deltaTime),
+              };
+              const motion = word.LetterGroup
+                ? rawMotion
+                : softenWordMotion(word.EndTime - word.StartTime, rawMotion);
+              const { scale: currentScale, yOffset: currentYOffset, glow: currentGlow } = motion;
               //if (!$simpleLyricsMode.get()) {
               // Use translate3d to ensure GPU-accelerated transforms
               setStyleIfChanged(
@@ -1237,13 +1354,12 @@ export function Animate(position: number): void {
     for (let index = 0; index < arr.length; index++) {
       const line = arr[index];
       if (!line.HTMLElement.isConnected) continue;
+      applyMotionPreference(line, reducedMotion);
       const lineState = getElementState(ProcessedPosition, line.StartTime, line.EndTime);
 
       if (lineState === "Active") {
-        if (Blurring_LastLine !== index) {
-          applyBlur(arr, index, BlurMultiplier);
-          Blurring_LastLine = index;
-        }
+        activeBlurSignature += `${index},`;
+        if (activeBlurIndex === null) activeBlurIndex = index;
 
         if (!line.HTMLElement.classList.contains("Active")) {
           line.HTMLElement.classList.add("Active");
@@ -1400,6 +1516,15 @@ export function Animate(position: number): void {
         }
       }
     }
+  }
+  const blurAnchor = activeBlurIndex ?? Blurring_LastLine;
+  if (blurAnchor !== null && (CurrentLyricsType === "Syllable" || CurrentLyricsType === "Line")) {
+    updateSpatialBlur(
+      LyricsObject.Types[CurrentLyricsType].Lines,
+      blurAnchor,
+      ProcessedPosition,
+      activeBlurSignature
+    );
   }
   // Commit any queued style changes after completing the animation computations
   flushStyleBatch();

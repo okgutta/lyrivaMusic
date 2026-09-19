@@ -1,0 +1,113 @@
+/* Ordinary Spotify panes need a compact header too: the usable pane can be
+   narrow even when the desktop window itself is wide. */
+#SpicyLyricsPage.CompactMode:not(.Fullscreen):not(.CardMode) {
+  --LyricsLeftSidePadding: clamp(20px, 6cqw, 44px);
+  --LyricsRightSidePadding: clamp(20px, 6cqw, 44px);
+}
+
+#SpicyLyricsPage.CompactMode:not(.Fullscreen) .ContentBox {
+  --Compact_NowBarHeight: clamp(58px, 12cqh, 88px);
+  --compact-header-top: 64px;
+}
+
+#SpicyLyricsPage.CompactMode:not(.Fullscreen) .ContentBox .NowBar {
+  margin-top: var(--compact-header-top);
+  left: 0 !important;
+  pointer-events: none;
+}
+
+#SpicyLyricsPage.CompactMode:not(.Fullscreen) .ContentBox .NowBar:not(.Active) {
+  visibility: hidden;
+}
+
+#SpicyLyricsPage.CompactMode:not(.Fullscreen) .ContentBox .NowBar.Active {
+  pointer-events: auto;
+}
+
+#SpicyLyricsPage.CompactMode:not(.Fullscreen) .ContentBox .NowBar .CenteredView .Header {
+  --CompactNowBarHeaderGap: 16px;
+  --MediaBoxSize: min(100cqh, 22cqw);
+  align-items: center;
+  height: 100%;
+}
+
+#SpicyLyricsPage.CompactMode:not(.Fullscreen) .ContentBox .NowBar .Header .MediaBox {
+  flex-shrink: 0;
+}
+
+#SpicyLyricsPage.CompactMode:not(.Fullscreen) .ContentBox .NowBar .Header .Metadata {
+  container-type: inline-size;
+  position: static;
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  height: auto;
+  margin: 0;
+  gap: 4px;
+  justify-content: center;
+}
+
+#SpicyLyricsPage.CompactMode:not(.Fullscreen)
+  .ContentBox
+  .NowBar
+  .Metadata
+  :is(.SongName, .Artists) {
+  mask-image: none;
+  -webkit-mask-image: none;
+  text-align: start;
+}
+
+#SpicyLyricsPage.CompactMode:not(.Fullscreen) .ContentBox .NowBar .Header .Metadata .SongName {
+  font-size: clamp(1rem, 3cqw, 1.4rem) !important;
+  line-height: 1.3 !important;
+  width: 100%;
+}
+
+#SpicyLyricsPage.CompactMode:not(.Fullscreen) .ContentBox .NowBar .Header .Metadata .Artists {
+  font-size: clamp(0.8rem, 2.3cqw, 1rem) !important;
+  line-height: 1.4 !important;
+  width: 100%;
+  opacity: 0.65;
+}
+
+#SpicyLyricsPage.CompactMode:not(.Fullscreen)
+  .ContentBox
+  .NowBar
+  .Metadata
+  :is(.SongName, .Artists)
+  span {
+  animation: none;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: start;
+  padding: 0;
+}
+
+#SpicyLyricsPage.CompactMode:not(.Fullscreen) .ContentBox .LyricsContainer {
+  margin-top: 0;
+  height: 100%;
+}
+
+#SpicyLyricsPage.CompactMode:not(.Fullscreen):has(.NowBar.Active) .ContentBox .LyricsContainer {
+  margin-top: calc(var(--compact-header-top) + var(--Compact_NowBarHeight) + 12px);
+  height: calc(100% - var(--compact-header-top) - var(--Compact_NowBarHeight) - 12px);
+}
+
+#SpicyLyricsPage.CompactMode:not(.Fullscreen) .ContentBox .LyricsContainer .LyricsContent {
+  --DefaultLyricsSize: clamp(1.85rem, calc(1cqw * 7), 3.5rem);
+}
+
+#SpicyLyricsPage.CompactMode:not(.Fullscreen).ViewControlsPosition_Bottom .ContentBox {
+  --compact-header-top: 24px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #SpicyLyricsPage .ContentBox .LyricsContainer,
+  #SpicyLyricsPage .ContentBox .NowBar,
+  #SpicyLyricsPage .LyricsContent,
+  #SpicyLyricsPage .SpicyLyricsScrollContainer {
+    transition: none !important;
+  }
+}

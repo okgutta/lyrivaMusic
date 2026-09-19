@@ -39,7 +39,7 @@ lyrivaMusic 自动获取歌词，让逐字高亮、原文与译文和专辑背�
 
 需要 **Spotify 桌面客户端**和已配置好的 **[Spicetify](https://spicetify.app/docs/getting-started/)**。使用发布包不需要安装 Node.js 或 Bun。
 
-1. 从 [Releases 下载最新版 `lyrivamusic.js`](https://github.com/okgutta/lyrivaMusic/releases/latest/download/lyrivamusic.js)。
+1. 从 [Releases 下载最新版 `lyrivamusic.js`](https://github.com/okgutta/lyrivaMusic/releases/latest/download/lyrivamusic.js)，只需这一个文件。
 2. 执行 `spicetify config-dir` 找到配置目录，将文件放进其中的 `Extensions` 文件夹。
 3. 执行以下命令启用扩展：
 
@@ -50,13 +50,15 @@ lyrivaMusic 自动获取歌词，让逐字高亮、原文与译文和专辑背�
 
 启动 Spotify 后，从歌词页工具栏的设置按钮或 Spotify 菜单进入 **lyrivaMusic 设置**。
 
+GitHub 自动生成的 `Source code (zip/tar.gz)` 是源码归档，不是安装包。
+
 ### 更新
 
 **v1.3.0 起支持自动更新。** 检测到 GitHub 新正式版本后，Spotify 内会自动打开更新页，显示说明和下载进度。下载并校验完成后点击「重新加载」，或留到下次启动生效。也可以在「设置 → 高级 → 版本与更新」手动检查。
 
-从 v1.2.0 或更早版本升级，需要下载一次新的 `lyrivamusic.js`，覆盖 `Extensions/lyrivamusic.js` 后执行 `spicetify apply`。后续普通更新无需重复安装。网络失败时继续使用原版本。
+从 v1.2.0 或更早版本升级，或需要手动更新时，只需下载最新版 `lyrivamusic.js`，覆盖 `Extensions/lyrivamusic.js` 后执行 `spicetify apply`。后续普通更新无需重复安装。网络失败时继续使用原版本。
 
-Release 附件中的 `lyrivamusic-runtime.js` 和 `manifest.json` 是自动更新组件，**只需安装 `lyrivamusic.js`**。发布流程和恢复机制见 [自动更新文档](docs/UPDATES.md)。
+新版本 Release 仅提供 `lyrivamusic.js` 安装附件；自动更新组件由 `updates` 分支提供，无需手动下载。发布流程和恢复机制见 [自动更新文档](docs/UPDATES.md)。
 
 如果旧版本使用了带版本号的文件名，请移除 Spicetify 配置中的旧条目，只启用一份 lyrivaMusic，避免重复加载。Spotify 更新后扩展未生效，可参考 [Spicetify 官方文档](https://spicetify.app/docs/getting-started/)重新应用。
 
@@ -115,7 +117,7 @@ docs/UPDATES.md      自动更新与发布说明
 .github/workflows/   持续集成与 Release 发布
 ```
 
-仓库仅维护 Spicetify 扩展。构建产物通过 Releases 分发；`dist/`、`node_modules/`、临时预览和本地备份不纳入版本管理。
+仓库仅维护 Spicetify 扩展。安装包通过 Releases 分发，自动更新组件通过 `updates` 分支分发；`dist/`、`node_modules/`、临时预览和本地备份不纳入版本管理。
 
 ## 致谢与许可证
 

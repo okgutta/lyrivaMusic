@@ -29,9 +29,16 @@ const virtualizerLogger = new Logger("Lyrics Virtualizer");
 // apply 起就静默失效。
 let moduleOnNewElementMounted: (() => void) | null = null;
 
+export interface LyricsLineGeometry {
+  readonly top: number;
+  readonly height: number;
+}
+
 class LyricsVirtualizer {
   private _virtualizer: Virtualizer<HTMLElement, HTMLElement> | null = null;
   private _allElements: HTMLElement[] = [];
+  private _elementIndices = new WeakMap<HTMLElement, number>();
+  private _layoutRevision = 0;
   // One positioning wrapper per line element. The wrapper gets position:absolute +
   // translateY from the virtualizer; the .line lives inside it so a CSS `scale` on
   // .line acts around its own center instead of composing with translateY through
@@ -107,6 +114,13 @@ class LyricsVirtualizer {
     // 持久保存：destroy() 会清空 _onNewElementMounted，而 init() 先调
     // destroy() —— 若不同步保存，回调注册一次后从第一次 apply 起就失效
     moduleOnNewElementMounted = cb;
+  }
+
+  private _updateContainerSize(width: number, height: number): void {
+    if (width === this._containerWidth && height === this._containerHeight) return;
+    this._containerWidth = width;
+    this._containerHeight = height;
+    this._layoutRevision++;
   }
 
   private _isNextBgLine(index: number): boolean {
@@ -244,8 +258,7 @@ class LyricsVirtualizer {
         previous: this._containerWidth,
         current: clientWidth,
       });
-      this._containerWidth = clientWidth;
-      this._containerHeight = clientHeight;
+      this._updateContainerSize(clientWidth, clientHeight);
       if (this._spacer) this._spacer.style.height = `${clientHeight / 2}px`;
       this._remeasureVisible();
       v._willUpdate();
@@ -258,7 +271,7 @@ class LyricsVirtualizer {
         previous: this._containerHeight,
         current: clientHeight,
       });
-      this._containerHeight = clientHeight;
+      this._updateContainerSize(this._containerWidth, clientHeight);
       if (this._spacer) this._spacer.style.height = `${clientHeight / 2}px`;
       v._willUpdate();
       return;
@@ -321,13 +334,13 @@ class LyricsVirtualizer {
       }
     });
     this._allElements = lineElements;
+    lineElements.forEach((element, index) => this._elementIndices.set(element, index));
     this._wrappers = Array.from({ length: lineElements.length }, () => null);
     this._virtualContainer = virtualContainer;
     this._scrollEl = scrollEl;
 
     const containerWidth = scrollEl.clientWidth || virtualContainer.clientWidth || 0;
-    this._containerWidth = containerWidth;
-    this._containerHeight = scrollEl.clientHeight;
+    this._updateContainerSize(containerWidth, scrollEl.clientHeight);
     virtualizerLogger.debug("Initial container width resolved", containerWidth);
 
     this._resizeObserver = this._maid!.Give(
@@ -426,7 +439,7 @@ class LyricsVirtualizer {
             previous: this._containerWidth,
             settled,
           });
-          this._containerWidth = settled;
+          this._updateContainerSize(settled, this._scrollEl.clientHeight);
           this._remeasureVisible();
         }
         // The scroll element may not have had its final size when init() ran, so
@@ -476,7 +489,7 @@ class LyricsVirtualizer {
               previous: this._containerHeight,
               next: el.clientHeight,
             });
-            this._containerHeight = el.clientHeight;
+            this._updateContainerSize(this._containerWidth, el.clientHeight);
             v._willUpdate();
           }
           return;
@@ -486,8 +499,7 @@ class LyricsVirtualizer {
           previous: this._containerWidth,
           next: newWidth,
         });
-        this._containerWidth = newWidth;
-        this._containerHeight = el.clientHeight;
+        this._updateContainerSize(newWidth, el.clientHeight);
 
         // Clear any existing timer
         if (this._resizeDebounceTimer !== null) {
@@ -522,7 +534,7 @@ class LyricsVirtualizer {
         if (!v || !this._scrollEl) return;
         const w = this._scrollEl.clientWidth;
         if (w > 0 && Math.abs(w - this._containerWidth) >= 0.5) {
-          this._containerWidth = w;
+          this._updateContainerSize(w, this._scrollEl.clientHeight);
         }
         // Push the live viewport size back into TanStack (its RO may have cached 0×0
         // while hidden and not re-fired) and re-mount from the fresh rect.
@@ -583,6 +595,7 @@ class LyricsVirtualizer {
       } while (this._onChangePending && this._virtualizer === v);
     } finally {
       this._inOnChange = false;
+      this._layoutRevision++;
     }
   }
 
@@ -680,6 +693,35 @@ class LyricsVirtualizer {
 
   getVirtualizer(): Virtualizer<HTMLElement, HTMLElement> | null {
     return this._virtualizer;
+  }
+
+  /** Read cached layout only; no element layout reads or index assumptions. */
+  getLineGeometry(element: HTMLElement): LyricsLineGeometry | null {
+    const index = this._elementIndices.get(element);
+    if (!this._virtualizer || index === undefined) return null;
+    const measurement = this._virtualizer.measurementsCache[index];
+    if (
+      !measurement ||
+      !Number.isFinite(measurement.start) ||
+      !Number.isFinite(measurement.size) ||
+      measurement.size < 0
+    ) {
+      return null;
+    }
+
+    // Wrapper sizes include trailing padding. Exclude it from the line center,
+    // especially for backing vocals whose gap differs from ordinary lyric rows.
+    const padding = this._wrappers[index]?.style.paddingBottom;
+    const gap = padding ? parseFloat(padding) : this._itemGap(index);
+    return { top: measurement.start, height: Math.max(0, measurement.size - gap) };
+  }
+
+  getViewportHeight(): number {
+    return this._containerHeight;
+  }
+
+  getLayoutRevision(): number {
+    return this._layoutRevision;
   }
 
   /**
@@ -977,6 +1019,8 @@ class LyricsVirtualizer {
     }
     this._virtualizer = null;
     this._allElements = [];
+    this._elementIndices = new WeakMap();
+    this._layoutRevision++;
     this._wrappers = [];
     this._mountedIndices.clear();
     this._lastVirtualWindowSignature = "";
@@ -1003,6 +1047,18 @@ export function initLyricsVirtualizer(
 
 export function getLyricsVirtualizer(): Virtualizer<HTMLElement, HTMLElement> | null {
   return lyricsVirtualizer.getVirtualizer();
+}
+
+export function getLyricsLineGeometry(element: HTMLElement): LyricsLineGeometry | null {
+  return lyricsVirtualizer.getLineGeometry(element);
+}
+
+export function getLyricsViewportHeight(): number {
+  return lyricsVirtualizer.getViewportHeight();
+}
+
+export function getLyricsLayoutRevision(): number {
+  return lyricsVirtualizer.getLayoutRevision();
 }
 
 export function scrollLyricsToIndex(

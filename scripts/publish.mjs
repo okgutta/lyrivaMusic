@@ -34,6 +34,7 @@ async function request(path, { method = "GET", body, binary = false, optional = 
   if (optional && response.status === 404) return null;
   if (!response.ok)
     throw new Error(`GitHub ${method} ${new URL(url).pathname}: HTTP ${response.status}`);
+  if (response.status === 204) return null;
   return response.json();
 }
 
@@ -66,6 +67,11 @@ if (
 ) {
   throw new Error("Release build and manifest differ.");
 }
+const installerBytes = await readFile("dist/lyrivamusic.js");
+const installerDigest = `sha256:${hash(installerBytes)}`;
+const existingInstaller = release?.assets.find((asset) => asset.name === "lyrivamusic.js");
+if (existingInstaller && existingInstaller.digest !== installerDigest)
+  throw new Error("Existing draft asset differs: lyrivamusic.js");
 let notes;
 try {
   notes = await readFile(`docs/releases/${tag}.md`, "utf8");
@@ -95,23 +101,21 @@ if (!release)
       prerelease: false,
     },
   });
-for (const name of [
-  "lyrivamusic.js",
-  "lyrivamusic-runtime.js",
-  "manifest.json",
-  "SHA256SUMS.txt",
-]) {
-  const bytes = await readFile(`dist/${name}`);
-  const existing = release.assets.find((asset) => asset.name === name);
-  if (existing) {
-    if (existing.digest !== `sha256:${hash(bytes)}`)
-      throw new Error(`Existing draft asset differs: ${name}`);
-    continue;
+// Users install one file. Internal update artifacts are served from updates only.
+if (!existingInstaller) {
+  const url = release.upload_url.replace(/\{.*$/, "") + "?name=lyrivamusic.js";
+  const uploaded = await request(url, { method: "POST", body: installerBytes, binary: true });
+  if (uploaded.digest !== installerDigest)
+    throw new Error("Asset verification failed: lyrivamusic.js");
+}
+
+// A retry may resume a draft created by the previous publisher. Remove only
+// its known internal attachments; published releases exited above untouched.
+const internalAssets = new Set(["lyrivamusic-runtime.js", "manifest.json", "SHA256SUMS.txt"]);
+for (const asset of release.assets) {
+  if (internalAssets.has(asset.name)) {
+    await request(`/releases/assets/${asset.id}`, { method: "DELETE" });
   }
-  const url = release.upload_url.replace(/\{.*$/, "") + `?name=${encodeURIComponent(name)}`;
-  const uploaded = await request(url, { method: "POST", body: bytes, binary: true });
-  if (uploaded.digest !== `sha256:${hash(bytes)}`)
-    throw new Error(`Asset verification failed: ${name}`);
 }
 
 // Runtime and manifest enter the distribution branch in one Git commit.

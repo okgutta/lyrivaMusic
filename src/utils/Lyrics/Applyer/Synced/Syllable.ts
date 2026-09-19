@@ -229,14 +229,6 @@ export function ApplySyllableLyrics(data: LyricsData, UseRomanized: boolean = fa
       lineElem.classList.add("OppositeAligned");
     }
 
-    // 翻译行（网易云 tlyric）：原文下方追加次级译文
-    if (line.Translation) {
-      const trans = document.createElement("div");
-      trans.className = "line-translation";
-      trans.textContent = line.Translation;
-      lineElem.appendChild(trans);
-    }
-
     lineElements.push(lineElem);
 
     let currentWordGroup: HTMLSpanElement | null = null;
@@ -339,6 +331,15 @@ export function ApplySyllableLyrics(data: LyricsData, UseRomanized: boolean = fa
         lineElem.appendChild(word);
       }
     });
+
+    // Keep the reading order consistent with line/static lyrics: all lead
+    // words and letter groups first, then this lead line's translation.
+    if (line.Translation) {
+      const trans = document.createElement("div");
+      trans.className = "line-translation";
+      trans.textContent = line.Translation;
+      lineElem.appendChild(trans);
+    }
 
     if (line.Background) {
       line.Background.forEach((bg) => {

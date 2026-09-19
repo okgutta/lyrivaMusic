@@ -1,3 +1,8 @@
+#SpicyLyricsPage .SliderBar:focus-visible {
+  outline: 2px solid rgb(255 255 255 / 80%);
+  outline-offset: 5px;
+}
+
 .Skeletoned {
   /* This part was made by @surfbryce, that made the Beautiful Lyrics extension */
   --BorderRadius: 0.5cqw;
@@ -1568,13 +1573,13 @@
   opacity: 0 !important;
 }
 
-#SpicyLyricsPage.CompactMode.CompactifyEnabledCompactMode
+#SpicyLyricsPage.Fullscreen.CompactMode.CompactifyEnabledCompactMode
   .ContentBox
   .NowBar
   .CenteredView
   .Header:has(.MediaBox:hover)
   .Metadata,
-#SpicyLyricsPage.ForcedCompactMode.CompactifyEnabledCompactMode
+#SpicyLyricsPage.Fullscreen.ForcedCompactMode.CompactifyEnabledCompactMode
   .ContentBox
   .NowBar
   .CenteredView

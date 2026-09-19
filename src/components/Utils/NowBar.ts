@@ -352,10 +352,10 @@ function OpenNowBar(skipSaving: boolean = false) {
         // Update initial values
         songProgressBar.Update({
           duration: SpotifyPlayer.GetDuration() ?? 0,
-          position: SpotifyPlayer.GetPosition() ?? 0,
+          position: Spicetify.Player.getProgress() ?? 0,
         });
 
-        const TimelineElem = document.createElement("div");
+        const TimelineElem = pageContainer.ownerDocument.createElement("div");
         ActiveSongProgressBarInstance_Map.set("TimeLineElement", TimelineElem);
         TimelineElem.classList.add("Timeline");
         TimelineElem.innerHTML = `
@@ -371,12 +371,57 @@ function OpenNowBar(skipSaving: boolean = false) {
           console.error("Could not find SliderBar element");
           return null;
         }
+        const timelineDocument = pageContainer.ownerDocument;
+
+        const updateAria = (position: number, duration: number) => {
+          const value = String(Math.floor(Math.max(0, position) / 1000));
+          const max = String(Math.floor(Math.max(0, duration) / 1000));
+          if (
+            SliderBar.getAttribute("aria-valuenow") !== value ||
+            SliderBar.getAttribute("aria-valuemax") !== max
+          ) {
+            SliderBar.setAttribute("aria-valuenow", value);
+            SliderBar.setAttribute("aria-valuemax", max);
+            SliderBar.setAttribute(
+              "aria-valuetext",
+              `${songProgressBar.GetFormattedPosition()} / ${songProgressBar.GetFormattedDuration()}`
+            );
+          }
+        };
+        const handleTimelineKeyDown = (event: KeyboardEvent) => {
+          const duration = SpotifyPlayer.GetDuration() ?? 0;
+          if (duration <= 0) return;
+          const current = Spicetify.Player.getProgress() ?? 0;
+          const step = event.shiftKey ? 10000 : 5000;
+          const value =
+            event.key === "Home"
+              ? 0
+              : event.key === "End"
+                ? duration
+                : ["ArrowRight", "ArrowUp"].includes(event.key)
+                  ? current + step
+                  : ["ArrowLeft", "ArrowDown"].includes(event.key)
+                    ? current - step
+                    : undefined;
+          if (value === undefined) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const position = Math.max(0, Math.min(duration, value));
+          SpotifyPlayer.Seek(position);
+          songProgressBar.Update({ duration, position });
+          updateAria(position, duration);
+        };
 
         // Track dragging state
         let isDragging = false;
-        let dragPositionMs: number | null = null; // Track the current drag position in ms
+        let dragPositionMs: number | null = null;
+        let dragPointerId: number | null = null;
+        let dragUri: string | undefined;
+        let previousUserSelect = "";
+        const timelineWindow = timelineDocument.defaultView;
 
-        const updateTimelineState = (e: number | null = null): void => {
+        const updateTimelineState = (): void => {
+          if (isDragging && dragUri !== SpotifyPlayer.GetUri()) finishDrag();
           const PositionElem = TimelineElem.querySelector<HTMLElement>(".Time.Position");
           const DurationElem = TimelineElem.querySelector<HTMLElement>(".Time.Duration");
 
@@ -390,7 +435,7 @@ function OpenNowBar(skipSaving: boolean = false) {
           if (isDragging && dragPositionMs !== null) {
             positionToShow = dragPositionMs;
           } else {
-            positionToShow = e ?? SpotifyPlayer.GetPosition() ?? 0;
+            positionToShow = Spicetify.Player.getProgress() ?? 0;
           }
 
           // Update the progress bar state
@@ -409,158 +454,113 @@ function OpenNowBar(skipSaving: boolean = false) {
           }
           DurationElem.textContent = formattedDuration;
           PositionElem.textContent = formattedPosition;
+          updateAria(positionToShow, SpotifyPlayer.GetDuration() ?? 0);
         };
 
-        const sliderBarHandler = (event: MouseEvent) => {
-          // Direct use of the SliderBar element for click calculation
-          const positionMs = songProgressBar.CalculatePositionFromClick({
-            sliderBar: SliderBar,
-            event: event,
-          });
+        const positionAt = (clientX: number): number | null => {
+          const rect = SliderBar.getBoundingClientRect();
+          const duration = SpotifyPlayer.GetDuration() ?? 0;
+          if (rect.width <= 0 || duration <= 0 || !Number.isFinite(clientX)) return null;
+          return Math.floor(
+            Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) * duration
+          );
+        };
 
-          // Use the calculated position (in milliseconds)
-          if (typeof SpotifyPlayer !== "undefined" && SpotifyPlayer.Seek) {
-            SpotifyPlayer.Seek(positionMs);
+        const handleDragMove = (event: PointerEvent) => {
+          if (!isDragging || event.pointerId !== dragPointerId) return;
+          if (dragUri !== SpotifyPlayer.GetUri()) {
+            finishDrag();
+            return;
           }
+          const positionMs = positionAt(event.clientX);
+          if (positionMs === null) return;
+          event.preventDefault();
+          const duration = SpotifyPlayer.GetDuration() ?? 0;
+          const percentage = positionMs / duration;
+          dragPositionMs = positionMs;
+          SliderBar.style.setProperty("--SliderProgress", percentage.toString());
+          updateTimelineState();
+          Global.Event.evoke("nowbar:timeline:dragging", {
+            isDragging: true,
+            percentage,
+            positionMs,
+          });
         };
 
-        // Add drag functionality
-
-        const handleDragStart = (event: MouseEvent | TouchEvent) => {
+        // No event means cancellation (window blur, capture loss, song change or teardown).
+        const finishDrag = (event?: PointerEvent) => {
+          if (!isDragging) return;
+          const pointerId = dragPointerId;
+          const positionMs =
+            event && dragUri === SpotifyPlayer.GetUri() ? positionAt(event.clientX) : null;
+          isDragging = false;
+          dragPointerId = null;
+          dragPositionMs = null;
+          SliderBar.classList.remove("Dragging");
+          timelineDocument.body.style.userSelect = previousUserSelect;
+          timelineDocument.removeEventListener("pointermove", handleDragMove);
+          timelineDocument.removeEventListener("pointerup", handleDragEnd);
+          timelineDocument.removeEventListener("pointercancel", cancelDrag);
+          SliderBar.removeEventListener("lostpointercapture", cancelDrag);
+          timelineWindow?.removeEventListener("blur", cancelDrag);
+          if (pointerId !== null && SliderBar.hasPointerCapture?.(pointerId)) {
+            SliderBar.releasePointerCapture(pointerId);
+          }
+          SetControlsDragLock(false);
+          Global.Event.evoke("nowbar:timeline:dragging", {
+            isDragging: false,
+            ...(positionMs === null ? {} : { positionMs, finalPosition: true }),
+          });
+          if (positionMs !== null) SpotifyPlayer.Seek(positionMs);
+          updateTimelineState();
+        };
+        const handleDragEnd = (event: PointerEvent) => {
+          if (event.pointerId === dragPointerId) finishDrag(event);
+        };
+        const cancelDrag = (event?: Event) => {
+          if (event && "pointerId" in event && event.pointerId !== dragPointerId) return;
+          finishDrag();
+        };
+        const handleDragStart = (event: PointerEvent) => {
+          if (
+            isDragging ||
+            !event.isPrimary ||
+            event.button !== 0 ||
+            positionAt(event.clientX) === null
+          )
+            return;
+          event.preventDefault();
           isDragging = true;
-          // .Dragging keeps the bar thickened and turns off the fill's eased glide
-          // so it tracks the pointer 1:1.
+          dragPointerId = event.pointerId;
+          dragUri = SpotifyPlayer.GetUri();
+          previousUserSelect = timelineDocument.body.style.userSelect;
+          timelineDocument.body.style.userSelect = "none";
           SliderBar.classList.add("Dragging");
-          document.body.style.userSelect = "none"; // Prevent text selection during drag
-          // Keep the overlay visible if the pointer leaves the artwork mid-drag
+          SliderBar.focus({ preventScroll: true });
+          SliderBar.setPointerCapture?.(event.pointerId);
           SetControlsDragLock(true);
-
-          // Add the event listeners for drag movement and end
-          document.addEventListener("mousemove", handleDragMove);
-          document.addEventListener("touchmove", handleDragMove);
-          document.addEventListener("mouseup", handleDragEnd);
-          document.addEventListener("touchend", handleDragEnd);
-          // 触摸被系统中断（来电/手势）时也要清理拖拽锁和监听
-          document.addEventListener("touchcancel", handleDragEnd);
-
-          // Emit event that dragging has started
-          Global.Event.evoke("nowbar:timeline:dragging", { isDragging: true });
-
-          // Handle the initial position update
+          timelineDocument.addEventListener("pointermove", handleDragMove, { passive: false });
+          timelineDocument.addEventListener("pointerup", handleDragEnd);
+          timelineDocument.addEventListener("pointercancel", cancelDrag);
+          SliderBar.addEventListener("lostpointercapture", cancelDrag);
+          timelineWindow?.addEventListener("blur", cancelDrag);
           handleDragMove(event);
         };
 
-        const handleDragMove = (event: MouseEvent | TouchEvent) => {
-          if (!isDragging) return;
-
-          // Get the mouse/touch position
-          let clientX: number;
-          if ("touches" in event) {
-            clientX = event.touches[0].clientX;
-          } else {
-            clientX = event.clientX;
-          }
-
-          const rect = SliderBar.getBoundingClientRect();
-          const percentage = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-
-          // Update the slider visually during drag
-          SliderBar.style.setProperty("--SliderProgress", percentage.toString());
-
-          // Calculate position in milliseconds
-          const positionMs = Math.floor(percentage * (SpotifyPlayer.GetDuration() ?? 0));
-          dragPositionMs = positionMs; // Store the drag position
-
-          // Update the position text during drag
-          songProgressBar.Update({
-            duration: SpotifyPlayer.GetDuration() ?? 0,
-            position: positionMs,
-          });
-
-          // Emit event with current drag position
-          Global.Event.evoke("nowbar:timeline:dragging", {
-            isDragging: true,
-            percentage: percentage,
-            positionMs: positionMs,
-          });
-
-          const PositionElem = TimelineElem.querySelector<HTMLElement>(".Time.Position");
-          if (PositionElem) {
-            // Show the formatted position for the drag position
-            PositionElem.textContent = songProgressBar.GetFormattedPosition();
-          }
-        };
-
-        const handleDragEnd = (event: MouseEvent | TouchEvent) => {
-          if (!isDragging) return;
-          isDragging = false;
-          SliderBar.classList.remove("Dragging");
-          document.body.style.userSelect = ""; // Restore text selection
-
-          // Remove the event listeners
-          document.removeEventListener("mousemove", handleDragMove);
-          document.removeEventListener("touchmove", handleDragMove);
-          document.removeEventListener("mouseup", handleDragEnd);
-          document.removeEventListener("touchend", handleDragEnd);
-          document.removeEventListener("touchcancel", handleDragEnd);
-
-          // Get the final position
-          let clientX: number;
-          if ("changedTouches" in event) {
-            clientX = event.changedTouches[0].clientX;
-          } else {
-            clientX = (event as MouseEvent).clientX;
-          }
-
-          const rect = SliderBar.getBoundingClientRect();
-          const percentage = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-
-          // Calculate the position in milliseconds
-          const positionMs = Math.floor(percentage * (SpotifyPlayer.GetDuration() ?? 0));
-          dragPositionMs = null; // Clear drag position
-
-          // Emit event that dragging has ended with final position
-          Global.Event.evoke("nowbar:timeline:dragging", {
-            isDragging: false,
-            percentage: percentage,
-            positionMs: positionMs,
-            finalPosition: true,
-          });
-
-          // Seek to the new position
-          if (typeof SpotifyPlayer !== "undefined" && SpotifyPlayer.Seek) {
-            SpotifyPlayer.Seek(positionMs);
-          }
-
-          // After seeking, update the timeline state to reflect the new position
-          updateTimelineState();
-
-          SetControlsDragLock(false);
-        };
-
         const timelineMaid = new Maid();
-
-        // Add event listeners for drag
-        SliderBar.addEventListener("mousedown", handleDragStart);
-        SliderBar.addEventListener("touchstart", handleDragStart);
-
-        // Keep the click handler for simple clicks
-        SliderBar.addEventListener("click", sliderBarHandler);
-
+        SliderBar.tabIndex = 0;
+        SliderBar.setAttribute("role", "slider");
+        SliderBar.setAttribute("aria-label", "播放进度");
+        SliderBar.setAttribute("aria-valuemin", "0");
+        SliderBar.style.touchAction = "none";
+        SliderBar.addEventListener("pointerdown", handleDragStart);
+        SliderBar.addEventListener("keydown", handleTimelineKeyDown);
+        Spicetify.Player.addEventListener("songchange", cancelDrag);
         timelineMaid.Give(() => {
-          SliderBar.removeEventListener("click", sliderBarHandler);
-          SliderBar.removeEventListener("mousedown", handleDragStart);
-          SliderBar.removeEventListener("touchstart", handleDragStart);
-          document.removeEventListener("mousemove", handleDragMove);
-          document.removeEventListener("touchmove", handleDragMove);
-          document.removeEventListener("mouseup", handleDragEnd);
-          document.removeEventListener("touchend", handleDragEnd);
-          if (isDragging) {
-            isDragging = false;
-            SliderBar.classList.remove("Dragging");
-            document.body.style.userSelect = "";
-            SetControlsDragLock(false);
-          }
+          finishDrag();
+          SliderBar.removeEventListener("pointerdown", handleDragStart);
+          SliderBar.removeEventListener("keydown", handleTimelineKeyDown);
+          Spicetify.Player.removeEventListener("songchange", cancelDrag);
         });
 
         // Run initial update
