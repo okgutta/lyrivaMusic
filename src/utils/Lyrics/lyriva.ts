@@ -8,6 +8,7 @@
 //
 // 本模块只负责「请求 → 分类」，映射逻辑在 lyrivaMap.ts（纯函数）。
 // 负缓存由 fetchLyrics 按分类结果决定。
+import { ProjectName } from "../../../project/config.ts";
 import Logger from "../Logger.ts";
 import { getSpicetify } from "../getSpicetify.ts";
 import { buildLyrivaModelFromResponse } from "./lyrivaMap.ts";
@@ -176,7 +177,7 @@ export async function tryLyrivaLyrics(
 
   let raw: RawResult;
   try {
-    raw = await getJson(url, { Accept: "application/json" }, signal);
+    raw = await getJson(url, { Accept: "application/json", "X-Client-Name": ProjectName }, signal);
   } catch (err) {
     if (signal?.aborted) throw err;
     const msg = err instanceof Error ? err.message : String(err);

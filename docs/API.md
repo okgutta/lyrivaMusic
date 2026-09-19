@@ -29,7 +29,10 @@ GET https://api.lyriva.xyz/lyriva/lyrics
 
 ```http
 Accept: application/json
+X-Client-Name: lyrivaMusic
 ```
+
+`X-Client-Name` 用于 LYRIVA 首页与后台的客户端名称显示，直连和代理回退请求都会携带。它不用于认证，浏览器原始 `User-Agent` 仍由服务端保留供后台排查。
 
 成功响应的核心字段：
 
