@@ -67,6 +67,8 @@ import Whentil from "./modules/Whentil.ts";
 import { onFrame } from "./modules/FrameLoop.ts";
 import App from "./utils/app.ts";
 import { ensureSpicetifyMenuItem } from "./components/Utils/SpicetifyMenuCompat.ts";
+import { initializeUpdates } from "./utils/updates.tsx";
+import { ProjectVersion } from "../project/config.ts";
 
 async function main() {
   const appLogger = new Logger("App");
@@ -774,11 +776,11 @@ async function main() {
       const Artists = SpotifyPlayer.GetArtists();
       const Artist =
         Artists?.map((artist) => artist.uri?.replace("spotify:artist:", ""))[0] ?? undefined;
-      try {
-        await GetStaticBackground(Artist, SpotifyPlayer.GetId());
-      } catch {
+      // Artwork is optional and must not delay player event registration or
+      // the updater's startup health acknowledgement.
+      void GetStaticBackground(Artist, SpotifyPlayer.GetId()).catch(() => {
         dynamicBgLogger.error("Unable to prefetch static background");
-      }
+      });
     }
 
     window.addEventListener("online", () => {
@@ -1026,7 +1028,7 @@ async function main() {
 
   initNPVLyrics();
 
-  Hometinue();
+  await Hometinue();
 
   runThemeMatcher();
 
@@ -1104,4 +1106,6 @@ function registerSettingsMenu() {
   profileMenuItem.register();
 }
 
-main();
+await main();
+window.__LYRIVA_UPDATER__?.markHealthy(ProjectVersion);
+initializeUpdates();

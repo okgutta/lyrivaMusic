@@ -7,6 +7,7 @@ import ExperimentsSection from "./ExperimentsSection.tsx";
 import LyricsSection from "./LyricsSection.tsx";
 import PlaybackSection from "./PlaybackSection.tsx";
 import ServicesSection from "./ServicesSection.tsx";
+import UpdateSection from "./UpdateSection.tsx";
 import {
   DetailCustomConfig,
   DetailDeepSeekKey,
@@ -61,6 +62,7 @@ function sectionFor(
     case "advanced":
       return (
         <>
+          <UpdateSection query={query} sectionFilter={sectionFilter} />
           <ExperimentsSection query={query} sectionFilter={sectionFilter} />
           <DeveloperSection query={query} sectionFilter={sectionFilter} />
         </>

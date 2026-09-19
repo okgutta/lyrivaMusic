@@ -31,6 +31,7 @@ lyrivaMusic 自动获取歌词，让逐字高亮、原文与译文和专辑背�
 | **歌词窗口**     | 在支持 Document Picture-in-Picture 的客户端中弹出独立歌词窗口。              |
 | **缓存与预取**   | 本机保存歌词和翻译，预取当前歌曲与下一首歌词，减少重复等待。                 |
 | **简洁设置**     | 中性磨砂玻璃面板，支持搜索、歌词同步校准和播放布局调整。                     |
+| **自动更新**     | 检测 GitHub 新正式版本，自动打开更新页并下载；重新加载后启用。               |
 
 逐字歌词和译文的可用性取决于歌曲与歌词源。语言学习中的逐词对照由整行译文推断，仅供参考。
 
@@ -51,7 +52,11 @@ lyrivaMusic 自动获取歌词，让逐字高亮、原文与译文和专辑背�
 
 ### 更新
 
-下载新版本，覆盖 `Extensions/lyrivamusic.js`，再执行 `spicetify apply`。
+**v1.3.0 起支持自动更新。** 检测到 GitHub 新正式版本后，Spotify 内会自动打开更新页，显示说明和下载进度。下载并校验完成后点击「重新加载」，或留到下次启动生效。也可以在「设置 → 高级 → 版本与更新」手动检查。
+
+从 v1.2.0 或更早版本升级，需要下载一次新的 `lyrivamusic.js`，覆盖 `Extensions/lyrivamusic.js` 后执行 `spicetify apply`。后续普通更新无需重复安装。网络失败时继续使用原版本。
+
+Release 附件中的 `lyrivamusic-runtime.js` 和 `manifest.json` 是自动更新组件，**只需安装 `lyrivamusic.js`**。发布流程和恢复机制见 [自动更新文档](docs/UPDATES.md)。
 
 如果旧版本使用了带版本号的文件名，请移除 Spicetify 配置中的旧条目，只启用一份 lyrivaMusic，避免重复加载。Spotify 更新后扩展未生效，可参考 [Spicetify 官方文档](https://spicetify.app/docs/getting-started/)重新应用。
 
@@ -64,7 +69,7 @@ lyrivaMusic 自动获取歌词，让逐字高亮、原文与译文和专辑背�
 | **翻译** | 翻译服务、目标语言、密钥、模型和并发数。                                   |
 | **播放** | 媒体框尺寸、进度条位置、音量滑杆与歌词控制按钮位置。                       |
 | **缓存** | 查看和编辑翻译缓存，清理当前歌曲或全部歌词缓存。                           |
-| **高级** | 实验功能与开发者日志。                                                     |
+| **高级** | 版本与更新、实验功能与开发者日志。                                         |
 
 **歌词来源**：LYRIVA 自动连接、匿名获取。Genius 是可选的静态歌词兜底，在「歌词 → Genius 备用歌词」中填写 Access Token 后启用。
 
@@ -101,11 +106,13 @@ bun run build --no-copy
 src/                  扩展源码、样式、类型与相邻测试
   components/         歌词页面、设置面板与 Spotify 集成
   shared/lyrics/      扩展使用的翻译与逐词对照算法
+  updater/            更新检查、运行包校验和启动回退
   utils/Lyrics/       歌词获取、时间轴、渲染与翻译
-scripts/tests.mjs     扩展测试入口
+scripts/             构建、测试与自动发布
 project/config.ts    扩展名称与版本
 docs/API.md          歌词接口、翻译和缓存说明
-.github/workflows/   持续集成
+docs/UPDATES.md      自动更新与发布说明
+.github/workflows/   持续集成与 Release 发布
 ```
 
 仓库仅维护 Spicetify 扩展。构建产物通过 Releases 分发；`dist/`、`node_modules/`、临时预览和本地备份不纳入版本管理。
