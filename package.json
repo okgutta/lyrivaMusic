@@ -1,6 +1,6 @@
 {
   "name": "lyrivamusic",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "description": "为 Spotify 提供逐字同步、翻译和沉浸式歌词显示的 Spicetify 扩展。",
   "homepage": "https://github.com/okgutta/lyrivaMusic#readme",
   "bugs": {

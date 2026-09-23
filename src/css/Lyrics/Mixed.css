@@ -21,6 +21,10 @@
   --font-size: var(--DefaultLyricsSize);
   display: flex;
   flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
   transition: opacity 0.2s cubic-bezier(0.61, 1, 0.88, 1);
   font-size: var(--font-size) !important;
   will-change: transform, opacity;
@@ -342,7 +346,32 @@
   display: inline-flex;
   white-space: nowrap;
   flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
   justify-content: flex-start;
+}
+
+/* Line lyrics store the complete sentence as a text node inside a flex row.
+   Make that row a normal block so long sentences wrap at the pane edge. */
+#SpicyLyricsPage.SpicyRenderer
+  .LyricsContainer
+  .LyricsContent
+  .SpicyLyricsScrollContainer[data-lyrics-type="Line"]
+  .line {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+}
+
+#SpicyLyricsPage.SpicyRenderer
+  .LyricsContainer
+  .LyricsContent
+  .SpicyLyricsScrollContainer[data-lyrics-type="Line"]
+  .line.OppositeAligned {
+  text-align: end;
 }
 
 #SpicyLyricsPage.SpicyRenderer .OppositeAligned .word-group {
