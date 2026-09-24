@@ -18,10 +18,11 @@ for (const [reason, expected] of [
 const privateError = "<script>private-token</script> https://secret.example/api";
 assert.equal(classifyLyricsFailure(privateError), "unknown");
 assert.equal(lyricsFailureMessage(classifyLyricsFailure(privateError)).includes("secret"), false);
-for (const descriptor of ["unknown-error", "offline", "status-not-200", "lyrics-not-found"]) {
+for (const descriptor of ["unknown-error", "offline", "status-not-200"]) {
   assert.equal(canRetryLyricsNotice(descriptor), true);
 }
 for (const descriptor of [
+  "lyrics-not-found",
   "dj",
   "local-track",
   "video-track",

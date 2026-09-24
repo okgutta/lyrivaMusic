@@ -73,7 +73,12 @@ console.log(`Built lyrivaMusic ${version}: installer, runtime, update manifest a
 
 if (!args.includes("--no-copy") && !process.env.CI && process.env.SPICETIFY_SKIP !== "true") {
   const executable = process.platform === "win32" ? "spicetify.exe" : "spicetify";
-  const configDir = execFileSync(executable, ["config-dir"], { encoding: "utf8" }).trim();
+  let configDir = execFileSync(executable, ["config-dir"], { encoding: "utf8" }).trim();
+  // Some Windows Spicetify builds return an empty stdout for `config-dir`.
+  // Fall back to the conventional per-user directory so --apply never copies
+  // the installer into the repository's local Extensions folder by mistake.
+  if (!configDir && process.env.APPDATA) configDir = join(process.env.APPDATA, "spicetify");
+  if (!configDir) throw new Error("Unable to determine the Spicetify config directory.");
   const target = resolve(configDir, "Extensions");
   await mkdir(target, { recursive: true });
   await copyFile("dist/lyrivamusic.js", join(target, "lyrivamusic.js"));

@@ -792,7 +792,10 @@ async function fetchLyricsInner(
   }
 
   // ===== 权威无歌词 → NO_LYRICS 负缓存（身份限定，防旧错误负缓存误伤） =====
-  if (result.kind === "not-found" && fallback?.kind === "miss") {
+  // LYRIVA's not-found response is authoritative. Genius is only an optional
+  // positive fallback; if it is unavailable, do not turn a confirmed miss
+  // into an unknown-error that exposes a pointless retry button.
+  if (result.kind === "not-found" && fallback?.kind !== "hit") {
     if (LyricsStore) {
       try {
         const notFoundEntry = {

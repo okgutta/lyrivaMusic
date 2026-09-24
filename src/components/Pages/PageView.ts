@@ -486,14 +486,18 @@ function AppendViewControls(ReAppend: boolean = false) {
         <button id="RomanizationToggle" type="button" class="ViewControl" aria-label="${isRomanized ? "关闭罗马音" : "启用罗马音"}">
           ${isRomanized ? Icons.DisableRomanization : Icons.EnableRomanization}
         </button>
-        <button id="TranslateToggle" type="button"
+        ${
+          translationState !== "unavailable"
+            ? `<button id="TranslateToggle" type="button"
           class="ViewControl${translationState === "ready" ? " translation-ready" : ""}${translationState === "loading" ? " translation-loading" : ""}${translationState === "error" ? " error" : ""}"
           data-translation-state="${translationState}"
           aria-label="${translationControl.label}"
           aria-busy="${translationState === "loading"}"
           ${translationControl.disabled ? "disabled" : ""}>
           ${translationControl.icon}
-        </button>
+        </button>`
+            : ""
+        }
         ${
           !Fullscreen.IsOpen && !Fullscreen.CinemaViewOpen
             ? IsPIP

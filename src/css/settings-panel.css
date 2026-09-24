@@ -1350,3 +1350,195 @@ sl-generic-modal.SpicyLyricsModal
     gap: 6px;
   }
 }
+
+/* ── Shared liquid-glass controls ────────────────────────────────────────
+   Settings uses the same material language as the lyric-page controls. Keep
+   the layout and semantic accent colors, but give every interactive surface
+   the same translucent fill, frosted blur, bevel and depth. */
+.sl-sp-panel,
+.sl-sp-root {
+  --slsp-material-shadow:
+    0 10px 24px -8px rgba(8, 10, 18, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.36),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16), inset 0 -1px 0 rgba(255, 255, 255, 0.18);
+  --slsp-material-shadow-hover:
+    0 14px 32px -8px rgba(8, 10, 18, 0.5), 0 0 22px -4px rgba(255, 255, 255, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.48), inset 0 0 0 1px rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.24);
+}
+
+.sl-sp-sidebar-nav,
+.sl-sp-group,
+.sl-sp-search-wrap,
+.sl-sp-select,
+.sl-sp-input,
+.sl-sp-segmented,
+.sl-sp-stepper-field {
+  background: var(--material-regular-bg);
+  -webkit-backdrop-filter: var(--material-regular-blur);
+  backdrop-filter: var(--material-regular-blur);
+  border: 0;
+  box-shadow: var(--slsp-material-shadow);
+}
+
+.sl-sp-sidebar-nav {
+  box-shadow: var(--slsp-material-shadow);
+}
+
+.sl-sp-group {
+  background: var(--material-thick-bg);
+  -webkit-backdrop-filter: var(--material-thick-blur);
+  backdrop-filter: var(--material-thick-blur);
+  box-shadow: var(--liquid-cast-soft), var(--liquid-edge);
+}
+
+.sl-sp-sidebar-item,
+.sl-sp-nav-row,
+.sl-sp-choice-row,
+.sl-sp-stepper-button,
+.sl-sp-stepper-reset,
+.sl-sp-back-btn {
+  transition:
+    background 0.2s var(--slsp-ease-out),
+    color 0.2s var(--slsp-ease-out),
+    box-shadow 0.2s var(--slsp-ease-out),
+    transform 0.12s ease;
+}
+
+.sl-sp-sidebar-item:hover,
+.sl-sp-nav-row:not(:disabled):hover,
+.sl-sp-choice-row:hover,
+.sl-sp-stepper-button:not(:disabled):hover,
+.sl-sp-stepper-reset:not(:disabled):hover,
+.sl-sp-back-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  color: var(--color-text-primary);
+}
+
+.sl-sp-sidebar-item--active,
+.sl-sp-choice-row.sl-sp-choice-row--active {
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: var(--liquid-edge);
+}
+
+.sl-sp-sidebar-item:active,
+.sl-sp-nav-row:active,
+.sl-sp-choice-row:active,
+.sl-sp-back-btn:active {
+  transform: scale(0.985);
+}
+
+.sl-sp-search-wrap,
+.sl-sp-select,
+.sl-sp-input {
+  box-shadow: var(--slsp-material-shadow);
+}
+
+.sl-sp-search-wrap:hover,
+.sl-sp-select:hover,
+.sl-sp-input:hover {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: var(--slsp-material-shadow-hover);
+}
+
+.sl-sp-search-wrap:focus-within,
+.sl-sp-select:focus-visible,
+.sl-sp-input:focus {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow:
+    var(--slsp-material-shadow-hover),
+    0 0 0 2px var(--slsp-accent-ring);
+}
+
+.sl-sp-search-clear {
+  background: var(--material-regular-bg) !important;
+  -webkit-backdrop-filter: var(--material-regular-blur);
+  backdrop-filter: var(--material-regular-blur);
+  box-shadow: var(--liquid-edge);
+}
+
+.sl-sp-search-clear:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+  box-shadow: var(--slsp-material-shadow-hover);
+}
+
+.sl-sp-segmented {
+  box-shadow: var(--liquid-edge), var(--liquid-cast-soft);
+}
+
+.sl-sp-segmented-item.sl-sp-segmented-item--active {
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow:
+    var(--liquid-edge),
+    0 4px 12px -4px rgba(8, 10, 18, 0.45);
+}
+
+.sl-sp-toggle-track {
+  background: var(--material-regular-bg) !important;
+  -webkit-backdrop-filter: var(--material-regular-blur);
+  backdrop-filter: var(--material-regular-blur);
+  box-shadow: var(--liquid-edge) !important;
+}
+
+.sl-sp-toggle input:checked + .sl-sp-toggle-track {
+  background: rgba(255, 255, 255, 0.2) !important;
+  box-shadow:
+    var(--liquid-edge-strong),
+    0 4px 14px -5px rgba(8, 10, 18, 0.45) !important;
+}
+
+.sl-sp-slider-track {
+  background: var(--material-regular-bg);
+  box-shadow: var(--liquid-edge);
+}
+
+.sl-sp-slider-fill {
+  box-shadow: 0 0 10px -2px rgba(255, 255, 255, 0.24);
+}
+
+.sl-sp-btn,
+.sl-sp-refresh {
+  background: var(--material-regular-bg);
+  -webkit-backdrop-filter: var(--material-regular-blur);
+  backdrop-filter: var(--material-regular-blur);
+  box-shadow: var(--slsp-material-shadow);
+}
+
+.sl-sp-btn:hover,
+.sl-sp-refresh:hover {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: var(--slsp-material-shadow-hover);
+}
+
+.sl-sp-btn:active,
+.sl-sp-refresh:active {
+  transform: scale(0.97);
+}
+
+.sl-sp-btn.sl-sp-btn--primary {
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: var(--liquid-edge-strong), var(--liquid-cast-soft);
+}
+
+.sl-sp-btn.sl-sp-btn--primary:hover {
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: var(--slsp-material-shadow-hover);
+}
+
+.sl-sp-close {
+  -webkit-backdrop-filter: var(--material-regular-blur);
+  backdrop-filter: var(--material-regular-blur);
+  box-shadow: var(--slsp-material-shadow);
+}
+
+.sl-sp-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: var(--slsp-material-shadow-hover);
+}
+
+.sl-sp-empty-icon {
+  background: var(--material-regular-bg) !important;
+  -webkit-backdrop-filter: var(--material-regular-blur);
+  backdrop-filter: var(--material-regular-blur);
+  box-shadow: var(--liquid-edge), var(--liquid-cast-soft) !important;
+}

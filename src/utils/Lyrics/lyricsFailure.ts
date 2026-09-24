@@ -34,10 +34,9 @@ export function lyricsFailureMessage(kind: LyricsFailureKind): string {
 }
 
 export function canRetryLyricsNotice(descriptor: unknown): boolean {
+  // "lyrics-not-found" is an authoritative backend result and is negative-cached;
+  // retrying it only repeats the same request until the cache is explicitly cleared.
   return (
-    descriptor === "unknown-error" ||
-    descriptor === "offline" ||
-    descriptor === "status-not-200" ||
-    descriptor === "lyrics-not-found"
+    descriptor === "unknown-error" || descriptor === "offline" || descriptor === "status-not-200"
   );
 }

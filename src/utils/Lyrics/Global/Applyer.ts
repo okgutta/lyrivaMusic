@@ -178,7 +178,7 @@ export default async function ApplyLyrics(
       const retry = document.createElement("button");
       retry.type = "button";
       retry.className = "lyrics-notice-retry";
-      const label = descriptor === "lyrics-not-found" ? "重新获取" : "重试";
+      const label = "重试";
       retry.textContent = label;
       const isCurrentNotice = () =>
         PageView.IsOpened &&
