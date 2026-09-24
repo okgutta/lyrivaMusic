@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "version": "1.5.0",
+  "loaderVersion": 1,
+  "runtime": {
+    "url": "https://raw.githubusercontent.com/okgutta/lyrivaMusic/updates/versions/v1.5.0/lyrivamusic-runtime.js",
+    "sha256": "95727a51e9353111f69cfe2ac57d42dc7e9be19af4a5bb069af275ffa207e9dd",
+    "size": 1456730
+  }
+}
