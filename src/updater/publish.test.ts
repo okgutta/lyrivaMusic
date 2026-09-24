@@ -37,17 +37,33 @@ import { createHash } from "node:crypto";
 import { appendFileSync, readFileSync } from "node:fs";
 const mode = process.env.RELEASE_TEST_MODE;
 const digest = bytes => createHash("sha256").update(bytes).digest("hex");
-let uploads = 0, verified = 0, channelPublished = false;
+let uploads = 0, verified = 0, channelPublished = false, releasePublished = false;
 const removedAssets = [];
+const removedReleases = [];
+const pagedReleases = [
+  Array.from({ length: 100 }, (_, index) => ({
+    id: 1000 + index,
+    tag_name: "v99.0." + index,
+    draft: false,
+    prerelease: false,
+  })),
+  [
+    { id: 201, tag_name: "v1.2.0", draft: false, prerelease: false },
+    { id: 202, tag_name: "v1.4.0", draft: false, prerelease: false },
+    { id: 203, tag_name: "nightly", draft: false, prerelease: false },
+    { id: 204, tag_name: "v1.1.0", draft: true, prerelease: false },
+    { id: 205, tag_name: "v1.1.0", draft: false, prerelease: true },
+  ],
+];
 const draft = { id: 1, tag_name: "v1.3.0", draft: true, assets: [], upload_url: "https://uploads.github.com/repos/okgutta/lyrivaMusic/releases/1/assets{?name}" };
 globalThis.fetch = async (input, init = {}) => {
   const url = new URL(input);
   const path = url.pathname.replace("/repos/okgutta/lyrivaMusic", "");
   const method = init.method || "GET";
-  appendFileSync("requests.log", method + " " + path + "\\n");
+  appendFileSync("requests.log", method + " " + path + url.search + "\\n");
   const json = (value, status = 200) => new Response(JSON.stringify(value), { status });
   if (path === "/releases/tags/v1.3.0") {
-    if (mode === "published") return json({ ...draft, draft: false });
+    if (["published", "published-cleanup", "published-stale"].includes(mode)) return json({ ...draft, draft: false });
     if (["retry", "retry-legacy", "installer-mismatch"].includes(mode)) {
       const assets = [{ id: 10, name: "lyrivamusic.js", digest: mode === "installer-mismatch" ? "sha256:wrong" : "sha256:" + digest(readFileSync("dist/lyrivamusic.js")) }];
       if (mode === "retry-legacy" || mode === "installer-mismatch") assets.push(...["lyrivamusic-runtime.js", "manifest.json", "SHA256SUMS.txt"].map((name, index) => ({id: 11 + index, name})));
@@ -56,7 +72,13 @@ globalThis.fetch = async (input, init = {}) => {
     }
     return json(null, 404);
   }
-  if (path === "/releases/latest") return json({ tag_name: mode === "stale" ? "v1.4.0" : "v1.2.0" });
+  if (path === "/releases/latest") {
+    if (mode === "published-cleanup" || (mode === "cleanup" && releasePublished)) {
+      return json({ id: 1, tag_name: "v1.3.0" });
+    }
+    if (["stale", "published-stale"].includes(mode)) return json({ id: 2, tag_name: "v1.4.0" });
+    return json({ tag_name: "v1.2.0" });
+  }
   if (path === "/git/ref/tags/v1.3.0") return json(null, 404);
   if (path === "/git/refs" && method === "POST") {
     const data = JSON.parse(init.body);
@@ -64,6 +86,10 @@ globalThis.fetch = async (input, init = {}) => {
     return json({});
   }
   if (path === "/releases" && method === "POST") return json(draft);
+  if (path === "/releases" && method === "GET") {
+    assert.ok(["cleanup", "published-cleanup"].includes(mode));
+    return json(pagedReleases[Number(url.searchParams.get("page")) - 1] ?? []);
+  }
   if (url.hostname === "uploads.github.com") {
     assert.equal(url.searchParams.get("name"), "lyrivamusic.js", "only the installer is a Release attachment");
     uploads++;
@@ -74,6 +100,11 @@ globalThis.fetch = async (input, init = {}) => {
     const id = Number(path.split("/").pop());
     assert.ok([11, 12, 13].includes(id), "never remove the installer");
     removedAssets.push(id);
+    return new Response(null, { status: 204 });
+  }
+  if (path.startsWith("/releases/") && method === "DELETE") {
+    assert.ok(["cleanup", "published-cleanup"].includes(mode));
+    removedReleases.push(Number(path.split("/").pop()));
     return new Response(null, { status: 204 });
   }
   if (path === "/git/ref/heads/updates") return mode === "immutable" ? json({ object: { sha: "parent" } }) : json(null, 404);
@@ -95,6 +126,7 @@ globalThis.fetch = async (input, init = {}) => {
   if (path === "/releases/1" && method === "PATCH") {
     assert.equal(verified, 2, "verify both public files before exposing stable release");
     assert.equal(JSON.parse(init.body).draft, false);
+    releasePublished = true;
     return json({});
   }
   throw new Error("Unexpected publication request: " + method + " " + input);
@@ -111,6 +143,9 @@ globalThis.fetch = async (input, init = {}) => {
     "bad-upload",
     "raw-unavailable",
     "immutable",
+    "cleanup",
+    "published-cleanup",
+    "published-stale",
   ]) {
     await writeFile(join(directory, "requests.log"), "");
     const result = spawnSync(
@@ -125,6 +160,11 @@ globalThis.fetch = async (input, init = {}) => {
           GITHUB_SHA: "a".repeat(40),
           GITHUB_REPOSITORY: "okgutta/lyrivaMusic",
           RELEASE_TEST_MODE: mode,
+          KEEP_ONLY_LATEST_RELEASE: ["cleanup", "published-cleanup", "published-stale"].includes(
+            mode
+          )
+            ? "true"
+            : "",
         },
       }
     );
@@ -135,12 +175,22 @@ globalThis.fetch = async (input, init = {}) => {
     const requests = await readFile(join(directory, "requests.log"), "utf8");
     assert.equal(
       requests.includes("PATCH /releases/1"),
-      ["success", "retry", "retry-legacy"].includes(mode),
+      ["success", "retry", "retry-legacy", "cleanup"].includes(mode),
       mode
     );
     if (["published", "stale"].includes(mode)) assert.doesNotMatch(requests, /POST|PATCH|DELETE/);
     if (mode === "retry") assert.doesNotMatch(requests, /assets/);
     if (mode === "installer-mismatch") assert.doesNotMatch(requests, /POST|PATCH|DELETE/);
+    if (["cleanup", "published-cleanup"].includes(mode)) {
+      assert.match(requests, /DELETE \/releases\/201/);
+      assert.match(requests, /GET \/releases\?per_page=100&page=1/);
+      assert.match(requests, /GET \/releases\?per_page=100&page=2/);
+      assert.doesNotMatch(requests, /DELETE \/releases\/(202|203|204|205|10\d\d)/);
+    }
+    if (mode === "published-stale") {
+      assert.doesNotMatch(requests, /GET \/releases\?per_page=100/);
+      assert.doesNotMatch(requests, /DELETE \/releases\//);
+    }
   }
   console.log(
     "Single-file Release publication, legacy draft cleanup and update compatibility tests passed"

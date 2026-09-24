@@ -49,3 +49,4 @@ jobs:
       - run: node scripts/publish.mjs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KEEP_ONLY_LATEST_RELEASE: "true"

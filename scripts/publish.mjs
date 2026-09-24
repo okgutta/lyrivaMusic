@@ -15,7 +15,18 @@ const sha =
 const { version } = JSON.parse(await readFile("package.json", "utf8"));
 if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error("Expected a stable semantic version.");
 const tag = `v${version}`;
+const versionParts = version.split(".").map(Number);
 const hash = (data) => createHash("sha256").update(data).digest("hex");
+const parseStableTag = (tagName) => {
+  const match = typeof tagName === "string" && /^v(\d+)\.(\d+)\.(\d+)$/.exec(tagName);
+  return match ? match.slice(1).map(Number) : null;
+};
+const compareVersions = (left, right) => {
+  for (let index = 0; index < left.length; index++) {
+    if (left[index] !== right[index]) return left[index] - right[index];
+  }
+  return 0;
+};
 async function request(path, { method = "GET", body, binary = false, optional = false } = {}) {
   const url = path.startsWith("https:") ? path : api + path;
   if (!["api.github.com", "uploads.github.com"].includes(new URL(url).hostname))
@@ -39,20 +50,49 @@ async function request(path, { method = "GET", body, binary = false, optional = 
 }
 
 let release = await request(`/releases/tags/${tag}`, { optional: true });
+const isCurrentLatest = (latestRelease) =>
+  Boolean(
+    latestRelease?.tag_name === tag &&
+    (latestRelease.id == null || release?.id == null || latestRelease.id === release.id)
+  );
+async function removeOlderReleases() {
+  const latestRelease = await request("/releases/latest", { optional: true });
+  if (!isCurrentLatest(latestRelease)) {
+    console.log(`${tag} is not the latest release; keeping existing releases.`);
+    return;
+  }
+
+  const releases = [];
+  for (let page = 1; ; page++) {
+    const pageReleases = await request(`/releases?per_page=100&page=${page}`);
+    if (!Array.isArray(pageReleases)) throw new Error("GitHub releases response is not an array.");
+    releases.push(...pageReleases);
+    if (pageReleases.length < 100) break;
+  }
+
+  for (const candidate of releases) {
+    if (candidate.id === release?.id || candidate.tag_name === tag) continue;
+    if (candidate.draft || candidate.prerelease || candidate.id == null) continue;
+    const candidateVersion = parseStableTag(candidate.tag_name);
+    if (!candidateVersion || compareVersions(candidateVersion, versionParts) >= 0) continue;
+    await request(`/releases/${candidate.id}`, { method: "DELETE" });
+    console.log(`Removed older release ${candidate.tag_name}`);
+  }
+}
 if (release && !release.draft) {
+  if (process.env.KEEP_ONLY_LATEST_RELEASE === "true") await removeOlderReleases();
   console.log(`${tag} is already published. Increase the version for the next release.`);
   process.exit(0);
 }
 const latest = await request("/releases/latest", { optional: true });
-const latestVersion = latest?.tag_name?.replace(/^v/, "");
-if (latestVersion && /^\d+\.\d+\.\d+$/.test(latestVersion)) {
-  const candidate = version.split(".").map(Number);
-  const published = latestVersion.split(".").map(Number);
-  const difference = candidate.map((part, index) => part - published[index]).find(Boolean) ?? 0;
-  if (difference <= 0) {
+const latestVersion = parseStableTag(latest?.tag_name);
+if (latestVersion && compareVersions(versionParts, latestVersion) <= 0) {
+  if (versionParts.every((part, index) => part === latestVersion[index])) {
+    console.log(`${tag} is already the latest release; skipping stale workflow.`);
+  } else {
     console.log(`${tag} is older than the latest release; skipping stale workflow.`);
-    process.exit(0);
   }
+  process.exit(0);
 }
 const manifestBytes = await readFile("dist/manifest.json");
 const manifest = JSON.parse(manifestBytes);
@@ -174,4 +214,9 @@ await request(`/releases/${release.id}`, {
   method: "PATCH",
   body: { draft: false, make_latest: "true", body: notes },
 });
+
+// This project intentionally exposes only the current stable release. Keep
+// older release entries out of the public Releases page after the new one is
+// fully published; tags and the updates branch remain available as history.
+if (process.env.KEEP_ONLY_LATEST_RELEASE === "true") await removeOlderReleases();
 console.log(`Published https://github.com/${repository}/releases/tag/${tag}`);
