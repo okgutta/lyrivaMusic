@@ -412,8 +412,10 @@ class LyricsVirtualizer {
         let changed = false;
         for (const mutation of mutations) {
           const el = mutation.target as HTMLElement;
-          const index = this._allElements.indexOf(el);
-          if (index === -1) continue;
+          // Class changes are frequent while the animator advances the active
+          // line. The WeakMap avoids scanning every lyric line for each mutation.
+          const index = this._elementIndices.get(el);
+          if (index === undefined) continue;
           const wrapper = this._wrappers[index];
           if (!wrapper?.isConnected) continue;
           const gap = this._itemGap(index);

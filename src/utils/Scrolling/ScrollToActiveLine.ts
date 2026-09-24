@@ -13,10 +13,15 @@ import { ScrollIntoCenterViewCSS } from "../ScrollIntoView/Center.ts";
 import { ScrollIntoTopViewCSS } from "../ScrollIntoView/Top.ts";
 import { getLyricsVirtualizer, scrollLyricsToIndex } from "../Lyrics/LyricsVirtualizer.ts";
 
-// Define intersection types that include _LineIndex
-type LyricsLineWithIndex = LyricsLine & { _LineIndex: number };
-type LyricsSyllableWithIndex = LyricsSyllable & { _LineIndex: number };
-type EnhancedLyricsItem = LyricsLineWithIndex | LyricsSyllableWithIndex;
+type EnhancedLyricsItem = LyricsLine | LyricsSyllable;
+
+// Keep the index hint outside the lyric data. Lyrics objects are shared by the
+// renderer and may be frozen or reused by another view, so adding a private
+// property to every active line would be an unnecessary mutation.
+const lineIndexCache = new WeakMap<object, number>();
+
+const GetLineIndex = (line: EnhancedLyricsItem | null): number | undefined =>
+  line ? lineIndexCache.get(line) : undefined;
 
 // Define proper types for variables
 let lastLine: HTMLElement | null = null;
@@ -149,11 +154,13 @@ const GetLookaheadLine = (Lines: LyricsLine[] | LyricsSyllable[], leadIdx: numbe
 };
 
 const GetScrollLine = (Lines: LyricsLine[] | LyricsSyllable[], ProcessedPosition: number) => {
-  if ($currentLyricsType.get() === "Static" || $currentLyricsType.get() === "None" || !Lines)
-    return;
-  // 1) gather the indices of all active lines. This runs every animation frame,
-  // so we keep indices rather than materialising a copy of each active line.
-  const activeIndices: number[] = [];
+  const lyricsType = $currentLyricsType.get();
+  if (lyricsType === "Static" || lyricsType === "None" || !Lines) return;
+
+  // This runs every animation frame. Only the first and last active indices are
+  // needed by the anchor heuristic, so avoid allocating an array of indices.
+  let firstActiveIndex = -1;
+  let lastActiveIndex = -1;
   for (let i = 0; i < Lines.length; i++) {
     const line = Lines[i];
     if (
@@ -162,17 +169,25 @@ const GetScrollLine = (Lines: LyricsLine[] | LyricsSyllable[], ProcessedPosition
       line.StartTime <= ProcessedPosition &&
       line.EndTime >= ProcessedPosition
     ) {
-      activeIndices.push(i);
+      if (firstActiveIndex === -1) firstActiveIndex = i;
+      lastActiveIndex = i;
     }
   }
 
-  if (activeIndices.length === 0) return null;
+  if (firstActiveIndex === -1) return null;
 
-  const enhance = (index: number) => ({ ...Lines[index], _LineIndex: index }) as EnhancedLyricsItem;
+  // Keep the line object identity. The previous spread created a fresh object
+  // on every frame and made the auto-scroll path allocate even while playback
+  // was steady. Cache the index separately from the lyric data.
+  const enhance = (index: number): EnhancedLyricsItem => {
+    const line = Lines[index];
+    lineIndexCache.set(line, index);
+    return line;
+  };
 
   // The highest active line keeps the anchor as long as it (and its background
   // lines) finish before the line PIN_LOOKAHEAD real lines further down starts.
-  const anchorIdx = ResolveToLeadIndex(Lines, activeIndices[0]);
+  const anchorIdx = ResolveToLeadIndex(Lines, firstActiveIndex);
   const lookahead = GetLookaheadLine(Lines, anchorIdx);
   if (lookahead === null || GetGroupEndTime(Lines, anchorIdx) <= lookahead.StartTime) {
     return enhance(anchorIdx);
@@ -180,8 +195,8 @@ const GetScrollLine = (Lines: LyricsLine[] | LyricsSyllable[], ProcessedPosition
 
   // Anchor refused — fall back to the original heuristic: contiguous or off by
   // only 1 → the first active line, a bigger gap → the last.
-  const firstIdx = activeIndices[0];
-  const lastIdx = activeIndices[activeIndices.length - 1];
+  const firstIdx = firstActiveIndex;
+  const lastIdx = lastActiveIndex;
   return enhance(ResolveToLeadIndex(Lines, lastIdx - firstIdx <= 1 ? firstIdx : lastIdx));
 };
 
@@ -226,10 +241,11 @@ const GetScrollType = (): "Center" | "Top" => {
 };
 
 export function ScrollToActiveLine(ScrollSimplebar: any) {
-  if ($currentLyricsType.get() === "Static" || $currentLyricsType.get() === "None") return;
+  const lyricsType = $currentLyricsType.get();
+  if (lyricsType === "Static" || lyricsType === "None") return;
   if (!$lyricsContainerExists.get()) return;
 
-  const currentType = $currentLyricsType.get() as LyricsType;
+  const currentType = lyricsType as LyricsType;
   const Lines = LyricsObject.Types[currentType]?.Lines as LyricsLine[] | LyricsSyllable[];
   if (!Lines) return;
 
@@ -242,12 +258,22 @@ export function ScrollToActiveLine(ScrollSimplebar: any) {
   const PositionOffset = 0;
   const ProcessedPosition = Position + PositionOffset;
   const currentLine = GetScrollLine(Lines, ProcessedPosition) as EnhancedLyricsItem | null;
+  const currentLineIndex = GetLineIndex(currentLine);
 
-  const allLinesNotSung = Lines.every((line: any) => line.Status === "NotSung");
-  const activeLines = Lines.filter((line: any) => line.Status === "Active");
-  const sungLines = Lines.filter((line: any) => line.Status === "Sung");
-  const oneActiveNoSung = activeLines.length === 1 && sungLines.length === 0;
-  const allLinesSung = Lines.every((line: any) => line.Status === "Sung");
+  // These values are used only as counts/flags. A single pass avoids two full
+  // scans plus two temporary arrays on every animation frame.
+  let allLinesNotSung = true;
+  let allLinesSung = true;
+  let activeLineCount = 0;
+  let sungLineCount = 0;
+  for (const line of Lines) {
+    const status = line.Status;
+    if (status !== "NotSung") allLinesNotSung = false;
+    if (status !== "Sung") allLinesSung = false;
+    if (status === "Active") activeLineCount++;
+    else if (status === "Sung") sungLineCount++;
+  }
+  const oneActiveNoSung = activeLineCount === 1 && sungLineCount === 0;
   const shouldForceScroll = isForceScrollQueued || lastLine == null;
 
   if (
@@ -263,7 +289,7 @@ export function ScrollToActiveLine(ScrollSimplebar: any) {
       : currentLine?.HTMLElement;
     if (!scrollToLine) return;
     lastLine = scrollToLine;
-    const forceScrollLineIndex = allLinesSung ? Lines.length - 1 : currentLine?._LineIndex;
+    const forceScrollLineIndex = allLinesSung ? Lines.length - 1 : currentLineIndex;
     ScrollTo(
       container,
       scrollToLine,
@@ -290,7 +316,7 @@ export function ScrollToActiveLine(ScrollSimplebar: any) {
       : currentLine?.HTMLElement;
     if (!scrollToLine) return;
     lastLine = scrollToLine;
-    const smoothScrollLineIndex = allLinesSung ? Lines.length - 1 : currentLine?._LineIndex;
+    const smoothScrollLineIndex = allLinesSung ? Lines.length - 1 : currentLineIndex;
     ScrollTo(container, scrollToLine, false, GetScrollType(), smoothScrollLineIndex);
     if (smoothForceScrollQueued) {
       smoothForceScrollQueued = false; // Reset the queue after using it
@@ -411,14 +437,14 @@ export function ScrollToActiveLine(ScrollSimplebar: any) {
         if (!isSameLine) {
           lastLine = LineElem;
           const Scroll = () => {
-            ScrollTo(container, LineElem, false, GetScrollType(), currentLine._LineIndex);
+            const lineIndex = GetLineIndex(currentLine);
+            if (lineIndex === undefined) return;
+            ScrollTo(container, LineElem, false, GetScrollType(), lineIndex);
             scrolledToLastLine = false;
             scrolledToFirstLine = false;
           };
-          if (
-            Lines[currentLine._LineIndex - 1] &&
-            Lines[currentLine._LineIndex - 1].DotLine === true
-          ) {
+          const lineIndex = GetLineIndex(currentLine);
+          if (lineIndex !== undefined && Lines[lineIndex - 1]?.DotLine === true) {
             setTimeout(Scroll, 240);
           } else {
             Scroll();

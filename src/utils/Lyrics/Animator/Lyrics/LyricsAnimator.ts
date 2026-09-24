@@ -218,6 +218,11 @@ const _styleCache = new WeakMap<HTMLElement, Map<string, string>>();
 // Queue for batched style writes
 const _styleQueue = new Map<HTMLElement, Map<string, string>>();
 
+function parseStyleNumber(value: string): number | null {
+  const number = parseFloat(value);
+  return Number.isNaN(number) ? null : number;
+}
+
 function queueStyle(el: HTMLElement, prop: string, value: string): void {
   let props = _styleQueue.get(el);
   if (!props) {
@@ -236,13 +241,11 @@ function setStyleIfChanged(el: HTMLElement, prop: string, value: string, epsilon
   const prev = map.get(prop);
   if (prev !== undefined) {
     // Try numeric comparison when possible
-    const parseNum = (v: string) => {
-      // Extract numeric portion (supports "12px", "45%", "1.2")
-      const n = parseFloat(v);
-      return Number.isNaN(n) ? null : n;
-    };
-    const a = parseNum(prev);
-    const b = parseNum(value);
+    // Extract numeric portion (supports "12px", "45%", "1.2"). Keep this
+    // helper outside the hot path so every animated property update does not
+    // allocate a new closure.
+    const a = parseStyleNumber(prev);
+    const b = parseStyleNumber(value);
     if (a !== null && b !== null) {
       if (Math.abs(a - b) <= epsilon) return; // Skip tiny changes
     } else {
@@ -829,6 +832,27 @@ export function Animate(position: number): void {
 
           if (isLetterGroup && word.Letters) {
             if (wordState === "Active") {
+              // The active letter is shared by every letter in this word. Find
+              // it once per frame instead of rescanning the whole group inside
+              // the per-letter loop (which made this path O(n²)).
+              let activeLetterIndex = -1;
+              let activeLetterPercentage = 0;
+              for (let i = 0; i < word.Letters.length; i++) {
+                const candidate = word.Letters[i];
+                if (
+                  getElementState(ProcessedPosition, candidate.StartTime, candidate.EndTime) ===
+                  "Active"
+                ) {
+                  activeLetterIndex = i;
+                  activeLetterPercentage = getProgressPercentage(
+                    ProcessedPosition,
+                    candidate.StartTime,
+                    candidate.EndTime
+                  );
+                  break;
+                }
+              }
+
               for (let k = 0; k < word.Letters.length; k++) {
                 const letter = word.Letters[k];
 
@@ -845,29 +869,6 @@ export function Animate(position: number): void {
                   targetYOffset: number,
                   targetGlow: number,
                   targetGradient: number;
-
-                // Find active letter info (needed only for Active state calculation)
-                let activeLetterIndex = -1;
-                let activeLetterPercentage = 0;
-                if (wordState === "Active" && word.Letters) {
-                  for (let i = 0; i < word.Letters.length; i++) {
-                    if (
-                      getElementState(
-                        ProcessedPosition,
-                        word.Letters[i].StartTime,
-                        word.Letters[i].EndTime
-                      ) === "Active"
-                    ) {
-                      activeLetterIndex = i;
-                      activeLetterPercentage = getProgressPercentage(
-                        ProcessedPosition,
-                        word.Letters[i].StartTime,
-                        word.Letters[i].EndTime
-                      );
-                      break;
-                    }
-                  }
-                }
 
                 // Determine initial targets based on word state
                 // wordState is Active - Default to resting, then apply proximity-based animation
@@ -1442,14 +1443,17 @@ export function Animate(position: number): void {
             const currentGlow = dot.AnimatorStore.Glow.Step(deltaTime);
             const currentOpacity = dot.AnimatorStore.Opacity.Step(deltaTime);
 
-            // Use translate3d to ensure GPU-accelerated transforms
-            queueStyle(
+            // Use translate3d to ensure GPU-accelerated transforms. Route the
+            // values through the same cache as the other animated elements so
+            // settled dots do not rewrite three inline styles every frame.
+            setStyleIfChanged(
               dot.HTMLElement,
               "transform",
-              `translate3d(0, calc(var(--DefaultLyricsSize) * ${currentYOffset ?? 0}), 0)`
-            ); // Use --DefaultLyricsSize?
-            queueStyle(dot.HTMLElement, "scale", `${currentScale}`);
-            queueStyle(dot.HTMLElement, "opacity", `${currentOpacity}`);
+              `translate3d(0, calc(var(--DefaultLyricsSize) * ${currentYOffset ?? 0}), 0)`,
+              0.001
+            );
+            setStyleIfChanged(dot.HTMLElement, "scale", `${currentScale}`, 0.001);
+            setStyleIfChanged(dot.HTMLElement, "opacity", `${currentOpacity}`, 0.001);
             setStyleIfChanged(
               dot.HTMLElement,
               "--text-shadow-blur-radius",
